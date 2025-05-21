@@ -1,6 +1,6 @@
 # cargo-fixit
 
-> Proposed fixit commands for cargo ([project goal](https://rust-lang.github.io/rust-project-goals/2025h1/cargo-fixit.html))
+> Proposed fixit commands for cargo ([rust-lang/cargo#13214](https://github.com/rust-lang/cargo/issues/13214))
 
 [![Documentation](https://img.shields.io/badge/docs-master-blue.svg)][Documentation]
 ![License](https://img.shields.io/crates/l/cargo-fixit.svg)
