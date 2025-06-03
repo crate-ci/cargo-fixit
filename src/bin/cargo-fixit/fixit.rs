@@ -1,10 +1,10 @@
 use cargo_fixit::CargoResult;
+use clap::Parser;
 
-#[derive(Debug, clap::Subcommand)]
-#[command(styles = clap_cargo::style::CLAP_STYLING)]
-pub(crate) enum Plumbing {}
+#[derive(Debug, Parser)]
+pub(crate) struct Fixit {}
 
-impl Plumbing {
+impl Fixit {
     pub(crate) fn exec(self) -> CargoResult<()> {
         anyhow::bail!("not implemented");
     }
