@@ -127,6 +127,9 @@ default = []
 anyhow = "1.0.96"
 clap = { version = "4.5.31", features = ["derive"] }
 clap-cargo = "0.15.2"
+tracing = { version = "0.1.41", default-features = false, features = ["std"] }
+tracing-chrome = "0.7.2"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 
 [dev-dependencies]
 automod = "1.0.14"
