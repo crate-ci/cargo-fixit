@@ -1,7 +1,8 @@
 //! Tests for the `cargo fix` command.
 //! <https://github.com/rust-lang/cargo/blob/f1bf94d3b2a779d14e2ad6dff43f8d8017583b0d/tests/testsuite/fix.rs>
 
-use std::path::PathBuf;
+use std::env;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
 //use cargo::core::Edition;
@@ -12,7 +13,6 @@ use cargo_test_support::registry::{Dependency, Package};
 use cargo_test_support::str;
 use cargo_test_support::{basic_manifest, project};
 use cargo_test_support::{execs, paths, process, Execs, Project};
-use snapbox::cmd::cargo_bin;
 
 static ECHO_WRAPPER: OnceLock<Mutex<Option<PathBuf>>> = OnceLock::new();
 
@@ -59,15 +59,31 @@ pub(crate) trait FixitProject {
 
 impl FixitProject for Project {
     fn cargo_(&self, args: &str) -> Execs {
-        let mut p = if args.starts_with("fix") {
-            process(cargo_bin!("cargo-fixit"))
+        static PATH: OnceLock<String> = OnceLock::new();
+
+        let args = if args.split(" ").any(|a| a == "fix") {
+            args.replacen("fix", "fixit", 1)
         } else {
-            process(env!("CARGO"))
+            args.to_owned()
         };
 
-        p.cwd(self.root());
-        p.arg_line(&args.replacen("fix", "fixit", 1));
+        let mut p = process(env!("CARGO"));
 
+        p.cwd(self.root());
+        p.arg_line(&args);
+        p.env(
+            "PATH",
+            PATH.get_or_init(|| {
+                // Prepend path to cargo-fixit to current PATH
+                let curr = env::split_paths(env!("PATH")).collect::<Vec<_>>();
+                let mut new = vec![Path::new(env!("CARGO_BIN_EXE_cargo-fixit"))
+                    .parent()
+                    .unwrap()
+                    .to_owned()];
+                new.extend(curr);
+                env::join_paths(new).unwrap().into_string().unwrap()
+            }),
+        );
         execs().with_process_builder(p)
     }
 }
