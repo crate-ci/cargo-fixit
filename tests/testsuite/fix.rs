@@ -1,7 +1,8 @@
 //! Tests for the `cargo fix` command.
 //! <https://github.com/rust-lang/cargo/blob/f1bf94d3b2a779d14e2ad6dff43f8d8017583b0d/tests/testsuite/fix.rs>
 
-use std::path::PathBuf;
+use std::env;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
 //use cargo::core::Edition;
@@ -12,7 +13,6 @@ use cargo_test_support::registry::{Dependency, Package};
 use cargo_test_support::str;
 use cargo_test_support::{basic_manifest, project};
 use cargo_test_support::{execs, paths, process, Execs, Project};
-use snapbox::cmd::cargo_bin;
 
 static ECHO_WRAPPER: OnceLock<Mutex<Option<PathBuf>>> = OnceLock::new();
 
@@ -59,15 +59,31 @@ pub(crate) trait FixitProject {
 
 impl FixitProject for Project {
     fn cargo_(&self, args: &str) -> Execs {
-        let mut p = if args.starts_with("fix") {
-            process(cargo_bin!("cargo-fixit"))
+        static PATH: OnceLock<String> = OnceLock::new();
+
+        let args = if args.split(" ").any(|a| a == "fix") {
+            args.replacen("fix", "fixit", 1)
         } else {
-            process(env!("CARGO"))
+            args.to_owned()
         };
 
-        p.cwd(self.root());
-        p.arg_line(&args.replacen("fix", "fixit", 1));
+        let mut p = process(env!("CARGO"));
 
+        p.cwd(self.root());
+        p.arg_line(&args);
+        p.env(
+            "PATH",
+            PATH.get_or_init(|| {
+                // Prepend path to cargo-fixit to current PATH
+                let curr = env::split_paths(env!("PATH")).collect::<Vec<_>>();
+                let mut new = vec![Path::new(env!("CARGO_BIN_EXE_cargo-fixit"))
+                    .parent()
+                    .unwrap()
+                    .to_owned()];
+                new.extend(curr);
+                env::join_paths(new).unwrap().into_string().unwrap()
+            }),
+        );
         execs().with_process_builder(p)
     }
 }
@@ -96,7 +112,7 @@ fn do_not_fix_broken_builds() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -125,7 +141,7 @@ fn fix_broken_if_requested() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -180,9 +196,9 @@ fn fix_path_deps() {
             str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
 
 For more information, try '--help'.
+Usage: cargo fixit [OPTIONS]
 
 "#]]
             .unordered(),
@@ -229,7 +245,7 @@ fn do_not_fix_non_relevant_deps() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -375,7 +391,7 @@ fn fix_tests_with_edition_idioms() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--edition-idioms' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -465,7 +481,7 @@ fn upgrade_extern_crate() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -521,7 +537,7 @@ fn no_changes_necessary() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -550,7 +566,7 @@ fn fixes_extra_mut() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -580,7 +596,7 @@ fn fixes_two_missing_ampersands() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -609,7 +625,7 @@ fn tricky() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -636,7 +652,7 @@ fn preserve_line_endings() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -662,7 +678,7 @@ fn fix_deny_warnings() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -697,7 +713,7 @@ fn fix_deny_warnings_but_not_others() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -739,9 +755,9 @@ fn fix_two_files() {
             str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
 
 For more information, try '--help'.
+Usage: cargo fixit [OPTIONS]
 
 "#]]
             .unordered(),
@@ -822,7 +838,7 @@ fn fix_features() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -834,7 +850,7 @@ For more information, try '--help'.
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--features' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -856,7 +872,7 @@ fn shows_warnings() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -881,7 +897,7 @@ Error: not implemented
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -907,7 +923,7 @@ Error: not implemented
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-dirty' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -934,7 +950,7 @@ Error: not implemented
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-staged' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -961,7 +977,7 @@ Error: not implemented
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-dirty' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -1011,7 +1027,7 @@ fn do_not_fix_tests_by_default() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -1227,7 +1243,7 @@ fn fix_overlapping() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -1267,7 +1283,7 @@ fn fix_idioms() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--edition-idioms' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -1287,7 +1303,7 @@ fn idioms_2015_ok() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--edition-idioms' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -1315,7 +1331,7 @@ fn shows_warnings_on_second_run_without_changes() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -1327,7 +1343,7 @@ For more information, try '--help'.
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -1458,7 +1474,7 @@ fn doesnt_rebuild_dependencies() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -1472,7 +1488,7 @@ For more information, try '--help'.
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -1502,7 +1518,7 @@ fn does_not_crash_with_rustc_wrapper() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -1515,7 +1531,7 @@ For more information, try '--help'.
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -1543,7 +1559,7 @@ fn uses_workspace_wrapper_and_primary_wrapper_override() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -1593,7 +1609,7 @@ fn only_warn_for_relevant_crates() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -1677,7 +1693,7 @@ fn fix_to_broken_code() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -1777,7 +1793,7 @@ fn fix_color_message() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -1867,7 +1883,7 @@ fn rustfix_handles_multi_spans() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -1955,9 +1971,9 @@ fn fix_shared_cross_workspace() {
             str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
 
 For more information, try '--help'.
+Usage: cargo fixit [OPTIONS]
 
 "#]]
             .unordered(),
@@ -2044,7 +2060,7 @@ fn abnormal_exit() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--lib' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -2333,7 +2349,7 @@ fn fix_in_dependency() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--lib' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -2638,7 +2654,7 @@ fn fix_in_rust_src() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--lib' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -2672,7 +2688,7 @@ fn main() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -3184,9 +3200,9 @@ dep_df_false = { version = "0.1.0", default-features = false }
             str![[r#"
 [ERROR] unexpected argument '--all' found
 
-Usage: cargo fixit
 
 For more information, try '--help'.
+Usage: cargo fixit [OPTIONS]
 
 "#]]
             .unordered(),
@@ -3259,9 +3275,9 @@ fn fix_edition_skips_old_editions() {
     p.cargo_("fix -Zfix-edition=start=2024 -v")
         .masquerade_as_nightly_cargo(&["fix-edition"])
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '-Z' found
+[ERROR] unexpected argument '-v' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -3273,9 +3289,9 @@ For more information, try '--help'.
     p.cargo_("fix -Zfix-edition=end=2024,future -v")
         .masquerade_as_nightly_cargo(&["fix-edition"])
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '-Z' found
+[ERROR] unexpected argument '-v' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -3287,9 +3303,9 @@ For more information, try '--help'.
     p.cargo_("fix -Zfix-edition=start=2024 -p e2024")
         .masquerade_as_nightly_cargo(&["fix-edition"])
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '-Z' found
+[ERROR] unexpected argument '-p' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -3315,14 +3331,10 @@ fn fix_edition_future() {
     p.cargo_("fix -Zfix-edition=end=2024,future")
         .masquerade_as_nightly_cargo(&["fix-edition"])
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '-Z' found
-
-Usage: cargo fixit
-
-For more information, try '--help'.
+Error: not implemented
 
 "#]])
-        .with_status(2)
+        .with_status(1)
         .run();
     assert_e2e().eq(
         p.read_file("Cargo.toml"),
