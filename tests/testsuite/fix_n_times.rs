@@ -317,7 +317,7 @@ fn fix_no_suggestions() {
         str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -336,7 +336,7 @@ fn fix_one_suggestion() {
         str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -355,7 +355,7 @@ fn fix_one_overlapping() {
         str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -381,7 +381,7 @@ fn fix_overlapping_max() {
         str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -401,7 +401,7 @@ fn fix_verification_failed() {
         str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -424,7 +424,7 @@ fn fix_verification_failed_clippy() {
         str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -443,7 +443,7 @@ fn warnings() {
         str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -462,7 +462,7 @@ fn starts_with_error() {
         str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -483,7 +483,7 @@ fn broken_code_no_suggestions() {
         str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
@@ -504,7 +504,7 @@ fn broken_code_one_suggestion() {
         str![[r#"
 [ERROR] unexpected argument '--allow-no-vcs' found
 
-Usage: cargo fixit
+Usage: cargo fixit [OPTIONS]
 
 For more information, try '--help'.
 
