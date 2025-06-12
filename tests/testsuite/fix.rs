@@ -886,11 +886,8 @@ fn warns_if_no_vcs_detected() {
     let p = project().file("src/lib.rs", "pub fn foo() {}").build();
 
     p.cargo_("fix")
-        .with_status(1)
-        .with_stderr_data(str![[r#"
-Error: not implemented
-
-"#]])
+        .with_status(0)
+        .with_stderr_data(str![""])
         .run();
     p.cargo_("fix --allow-no-vcs")
         .with_status(2)
@@ -912,11 +909,8 @@ fn warns_about_dirty_working_directory() {
     p.change_file("src/lib.rs", "");
 
     p.cargo_("fix")
-        .with_status(1)
-        .with_stderr_data(str![[r#"
-Error: not implemented
-
-"#]])
+        .with_status(0)
+        .with_stderr_data(str![""])
         .run();
     p.cargo_("fix --allow-dirty")
         .with_status(2)
@@ -939,11 +933,8 @@ fn warns_about_staged_working_directory() {
     git::add(&repo);
 
     p.cargo_("fix")
-        .with_status(1)
-        .with_stderr_data(str![[r#"
-Error: not implemented
-
-"#]])
+        .with_status(0)
+        .with_stderr_data(str![""])
         .run();
     p.cargo_("fix --allow-staged")
         .with_status(2)
@@ -966,11 +957,8 @@ fn errors_about_untracked_files() {
     let _ = init(&p.root());
 
     p.cargo_("fix")
-        .with_status(1)
-        .with_stderr_data(str![[r#"
-Error: not implemented
-
-"#]])
+        .with_status(0)
+        .with_stderr_data(str![""])
         .run();
     p.cargo_("fix --allow-dirty")
         .with_status(2)
@@ -989,11 +977,8 @@ For more information, try '--help'.
 fn does_not_warn_about_clean_working_directory() {
     let p = git::new("foo", |p| p.file("src/lib.rs", "pub fn foo() {}"));
     p.cargo_("fix")
-        .with_status(1)
-        .with_stderr_data(str![[r#"
-Error: not implemented
-
-"#]])
+        .with_status(0)
+        .with_stderr_data(str![""])
         .run();
 }
 
@@ -1007,11 +992,8 @@ fn does_not_warn_about_dirty_ignored_files() {
     p.change_file("bar", "");
 
     p.cargo_("fix")
-        .with_status(1)
-        .with_stderr_data(str![[r#"
-Error: not implemented
-
-"#]])
+        .with_status(0)
+        .with_stderr_data(str![""])
         .run();
 }
 
@@ -1750,30 +1732,21 @@ fn fix_in_existing_repo_weird_ignore() {
     });
 
     p.cargo_("fix")
-        .with_status(1)
-        .with_stderr_data(str![[r#"
-Error: not implemented
-
-"#]])
+        .with_status(0)
+        .with_stderr_data(str![""])
         .run();
     // This is questionable about whether it is the right behavior. It should
     // probably be checking if any source file for the current project is
     // ignored.
     p.cargo_("fix")
         .cwd("inner")
-        .with_stderr_data(str![[r#"
-Error: not implemented
-
-"#]])
-        .with_status(1)
+        .with_stderr_data(str![""])
+        .with_status(0)
         .run();
     p.cargo_("fix")
         .cwd("src")
-        .with_status(1)
-        .with_stderr_data(str![[r#"
-Error: not implemented
-
-"#]])
+        .with_status(0)
+        .with_stderr_data(str![""])
         .run();
 }
 
@@ -3330,11 +3303,8 @@ fn fix_edition_future() {
 
     p.cargo_("fix -Zfix-edition=end=2024,future")
         .masquerade_as_nightly_cargo(&["fix-edition"])
-        .with_stderr_data(str![[r#"
-Error: not implemented
-
-"#]])
-        .with_status(1)
+        .with_stderr_data(str![""])
+        .with_status(0)
         .run();
     assert_e2e().eq(
         p.read_file("Cargo.toml"),

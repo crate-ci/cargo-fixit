@@ -19,9 +19,18 @@ fn basic() {
         .build();
 
     p.cargo_("fixit")
-        .with_status(1)
+        .with_status(0)
         .with_stderr_data(str![[r#"
-Error: not implemented
+[WARNING] variable does not need to be mutable
+ --> src/lib.rs:3:21
+  |
+3 |                 let mut b = 10;
+  |                     ----^
+  |                     |
+  |                     [HELP] remove this `mut`
+  |
+  = [NOTE] `#[warn(unused_mut)]` on by default
+
 
 "#]])
         .run();
