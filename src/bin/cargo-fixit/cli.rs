@@ -7,7 +7,7 @@ use clap::Parser;
 #[command(styles = clap_cargo::style::CLAP_STYLING)]
 pub(crate) enum Command {
     #[command(about, author, version)]
-    Fixit(crate::fixit::Fixit),
+    Fixit(crate::fixit::FixitArgs),
 }
 
 impl Command {
