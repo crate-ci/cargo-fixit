@@ -21,16 +21,7 @@ fn basic() {
     p.cargo_("fixit")
         .with_status(0)
         .with_stderr_data(str![[r#"
-[WARNING] variable does not need to be mutable
- --> src/lib.rs:3:21
-  |
-3 |                 let mut b = 10;
-  |                     ----^
-  |                     |
-  |                     [HELP] remove this `mut`
-  |
-  = [NOTE] `#[warn(unused_mut)]` on by default
-
+src/lib.rs: 1 fixes
 
 "#]])
         .run();
@@ -39,7 +30,7 @@ fn basic() {
         str![[r#"
 
             pub fn a() {
-                let mut b = 10;
+                let b = 10;
                 let _ = b;
             }
             
@@ -66,6 +57,7 @@ fn fixable_and_unfixable() {
     p.cargo_("fixit")
         .with_status(0)
         .with_stderr_data(str![[r#"
+src/lib.rs: 1 fixes
 [WARNING] unused variable: `c`
  --> src/lib.rs:6:21
   |
@@ -73,16 +65,6 @@ fn fixable_and_unfixable() {
   |                     ^ [HELP] if this is intentional, prefix it with an underscore: `_c`
   |
   = [NOTE] `#[warn(unused_variables)]` on by default
-
-[WARNING] variable does not need to be mutable
- --> src/lib.rs:3:21
-  |
-3 |                 let mut b = 10;
-  |                     ----^
-  |                     |
-  |                     [HELP] remove this `mut`
-  |
-  = [NOTE] `#[warn(unused_mut)]` on by default
 
 
 "#]])
@@ -92,7 +74,7 @@ fn fixable_and_unfixable() {
         str![[r#"
 
             pub fn a() {
-                let mut b = 10;
+                let b = 10;
                 let _ = b;
 
                 let c = 10;
