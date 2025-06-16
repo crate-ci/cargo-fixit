@@ -324,7 +324,7 @@ fn fix_no_suggestions() {
 fn fix_one_suggestion() {
     // One suggested fix, with a successful verification, no output.
     expect_fix_runs_rustc_n_times(
-        &[Step::OneFix, /*Step::SuccessNoOutput*/],
+        &[Step::OneFix, Step::SuccessNoOutput],
         |_execs| {},
         str![[r#"
 src/lib.rs: 1 fixes
@@ -339,13 +339,13 @@ src/lib.rs: 1 fixes
 fn fix_one_overlapping() {
     // Two suggested fixes, where one fails, then the next step returns no suggestions.
     expect_fix_runs_rustc_n_times(
-        &[Step::TwoFixOverlapping, /*Step::SuccessNoOutput*/],
+        &[Step::TwoFixOverlapping, Step::SuccessNoOutput],
         |_execs| {},
         str![[r#"
 src/lib.rs: 1 fixes
-rustc fix shim comment 2
+
 "#]],
-        "// fix-count 1",
+        "// fix-count 2",
         0,
     );
 }
@@ -357,17 +357,22 @@ fn fix_overlapping_max() {
     expect_fix_runs_rustc_n_times(
         &[
             Step::TwoFixOverlapping,
-            //Step::TwoFixOverlapping,
-            //Step::TwoFixOverlapping,
-            //Step::TwoFixOverlapping,
-            //Step::TwoFixOverlapping,
+            Step::TwoFixOverlapping,
+            Step::TwoFixOverlapping,
+            Step::TwoFixOverlapping,
+            Step::TwoFixOverlapping,
         ],
         |_execs| {},
         str![[r#"
 src/lib.rs: 1 fixes
-rustc fix shim comment 2
+src/lib.rs: 1 fixes
+src/lib.rs: 1 fixes
+src/lib.rs: 1 fixes
+rustc fix shim comment 5
+rustc fix shim comment 6
+
 "#]],
-        "// fix-count 1",
+        "// fix-count 5",
         0,
     );
 }
@@ -377,11 +382,11 @@ fn fix_verification_failed() {
     // One suggested fix, with an error in the verification step.
     // This should cause `cargo fix` to back out the changes.
     expect_fix_runs_rustc_n_times(
-        &[Step::OneFix, /*Step::Error*/],
+        &[Step::OneFix, Step::Error],
         |_execs| {},
         str![[r#"
 src/lib.rs: 1 fixes
-
+rustc fix shim error count=2
 "#]],
         "// fix-count 1",
         0,
@@ -394,13 +399,13 @@ fn fix_verification_failed_clippy() {
     // the error message has the customization for the clippy URL and
     // subcommand.
     expect_fix_runs_rustc_n_times(
-        &[Step::OneFix, /*Step::Error*/],
+        &[Step::OneFix, Step::Error],
         |execs| {
             execs.env("RUSTC_WORKSPACE_WRAPPER", wrapped_clippy_driver());
         },
         str![[r#"
 src/lib.rs: 1 fixes
-
+rustc fix shim error count=2
 "#]],
         "// fix-count 1",
         0,

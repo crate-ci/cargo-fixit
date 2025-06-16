@@ -39,10 +39,49 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
     if !args.allow_no_vcs {
         warn!("support for VCS has not been implemented");
     }
-    run_rustfix(&args)
+
+    let max_iterations: usize = env::var("CARGO_FIX_MAX_RETRIES")
+        .ok()
+        .and_then(|i| i.parse().ok())
+        .unwrap_or(4);
+    let mut early_exit = false;
+
+    for _ in 0..max_iterations {
+        let (errors, made_changes) = run_rustfix(&args)?;
+
+        if !made_changes {
+            for e in errors {
+                eprint!("{e}");
+            }
+            early_exit = true;
+            break;
+        }
+    }
+
+    if !early_exit {
+        let only = HashSet::new();
+        let output = std::process::Command::new(env!("CARGO"))
+            .args(["check", "--message-format", "json"])
+            .stderr(Stdio::piped())
+            .stdout(Stdio::piped())
+            .output()?;
+        for line in String::from_utf8(output.stdout)?.lines() {
+            let diagnostic = match serde_json::from_str::<CheckMessage>(line) {
+                Ok(check) => check.message,
+                _ => continue,
+            };
+            if collect_suggestions(&diagnostic, &only, rustfix::Filter::Everything).is_some() {
+                if let Some(rendered) = diagnostic.rendered {
+                    eprintln!("{rendered}");
+                }
+            };
+        }
+    }
+
+    Ok(())
 }
 
-fn run_rustfix(args: &FixitArgs) -> CargoResult<()> {
+fn run_rustfix(args: &FixitArgs) -> CargoResult<(IndexSet<String>, bool)> {
     let only = HashSet::new();
     let mut file_map = IndexMap::new();
 
@@ -116,6 +155,7 @@ fn run_rustfix(args: &FixitArgs) -> CargoResult<()> {
 
     let _exit_code = command.wait()?;
 
+    let mut made_changes = false;
     for (file, suggestions) in file_map {
         let code = match paths::read(file.as_ref()) {
             Ok(s) => s,
@@ -129,15 +169,15 @@ fn run_rustfix(args: &FixitArgs) -> CargoResult<()> {
         let mut fixed = CodeFix::new(&code);
         let mut num_fixes = 0;
 
-        for (suggestion, rendered) in suggestions {
-            match fixed.apply(&suggestion) {
+        for (suggestion, rendered) in suggestions.iter().rev() {
+            match fixed.apply(suggestion) {
                 Ok(()) => num_fixes += 1,
                 Err(rustfix::Error::AlreadyReplaced {
                     is_identical: true, ..
                 }) => {}
                 Err(e) => {
                     if let Some(rendered) = rendered {
-                        errors.insert(rendered);
+                        errors.insert(rendered.to_owned());
                     }
                     warn!("{e:?}");
                 }
@@ -147,12 +187,9 @@ fn run_rustfix(args: &FixitArgs) -> CargoResult<()> {
             eprintln!("{file}: {num_fixes} fixes");
             let new_code = fixed.finish()?;
             paths::write(&file, new_code)?;
+            made_changes = true;
         }
     }
 
-    for e in errors {
-        eprint!("{e}");
-    }
-
-    Ok(())
+    Ok((errors, made_changes))
 }
