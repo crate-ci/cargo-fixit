@@ -1,5 +1,6 @@
 use std::{
     collections::HashSet,
+    env,
     io::{BufRead, BufReader},
     process::Stdio,
 };
@@ -31,6 +32,10 @@ struct CheckMessage {
 }
 
 fn exec(_args: FixitArgs) -> CargoResult<()> {
+    run_rustfix()
+}
+
+fn run_rustfix() -> CargoResult<()> {
     let only = HashSet::new();
     let mut file_map = IndexMap::new();
 
@@ -49,10 +54,13 @@ fn exec(_args: FixitArgs) -> CargoResult<()> {
             Ok(check) => check.message,
             _ => continue,
         };
+        let filter = if env::var("__CARGO_FIX_YOLO").is_ok() {
+            rustfix::Filter::Everything
+        } else {
+            rustfix::Filter::MachineApplicableOnly
+        };
 
-        let Some(suggestion) =
-            collect_suggestions(&diagnostic, &only, rustfix::Filter::MachineApplicableOnly)
-        else {
+        let Some(suggestion) = collect_suggestions(&diagnostic, &only, filter) else {
             trace!("rejecting as not a MachineApplicable diagnosis: {diagnostic:?}");
             if let Some(rendered) = diagnostic.rendered {
                 errors.insert(rendered);
