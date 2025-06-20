@@ -1,10 +1,12 @@
 use std::{
     collections::HashSet,
+    env,
     io::{BufRead, BufReader},
+    path::Path,
     process::Stdio,
 };
 
-use cargo_fixit::CargoResult;
+use cargo_fixit::{CargoResult, CheckFlags};
 use cargo_util::paths;
 use clap::Parser;
 use indexmap::{IndexMap, IndexSet};
@@ -14,9 +16,12 @@ use tracing::{trace, warn};
 
 #[derive(Debug, Parser)]
 pub(crate) struct FixitArgs {
-    /// Unstable (nightly-only) flags
-    #[arg(short = 'Z', value_name = "FLAG")]
-    unstable_flags: Vec<String>,
+    /// Fix code even if a VCS was not detected
+    #[arg(long)]
+    allow_no_vcs: bool,
+
+    #[command(flatten)]
+    check_flags: CheckFlags,
 }
 
 impl FixitArgs {
@@ -30,7 +35,53 @@ struct CheckMessage {
     message: Diagnostic,
 }
 
-fn exec(_args: FixitArgs) -> CargoResult<()> {
+fn exec(args: FixitArgs) -> CargoResult<()> {
+    if !args.allow_no_vcs {
+        warn!("support for VCS has not been implemented");
+    }
+
+    let max_iterations: usize = env::var("CARGO_FIX_MAX_RETRIES")
+        .ok()
+        .and_then(|i| i.parse().ok())
+        .unwrap_or(4);
+    let mut early_exit = false;
+
+    for _ in 0..max_iterations {
+        let (errors, made_changes) = run_rustfix(&args)?;
+
+        if !made_changes {
+            for e in errors {
+                eprint!("{e}");
+            }
+            early_exit = true;
+            break;
+        }
+    }
+
+    if !early_exit {
+        let only = HashSet::new();
+        let output = std::process::Command::new(env!("CARGO"))
+            .args(["check", "--message-format", "json"])
+            .stderr(Stdio::piped())
+            .stdout(Stdio::piped())
+            .output()?;
+        for line in String::from_utf8(output.stdout)?.lines() {
+            let diagnostic = match serde_json::from_str::<CheckMessage>(line) {
+                Ok(check) => check.message,
+                _ => continue,
+            };
+            if collect_suggestions(&diagnostic, &only, rustfix::Filter::Everything).is_some() {
+                if let Some(rendered) = diagnostic.rendered {
+                    eprintln!("{rendered}");
+                }
+            };
+        }
+    }
+
+    Ok(())
+}
+
+fn run_rustfix(args: &FixitArgs) -> CargoResult<(IndexSet<String>, bool)> {
     let only = HashSet::new();
     let mut file_map = IndexMap::new();
 
@@ -38,6 +89,7 @@ fn exec(_args: FixitArgs) -> CargoResult<()> {
 
     let mut command = std::process::Command::new(env!("CARGO"))
         .args(["check", "--message-format", "json"])
+        .args(args.check_flags.to_flags())
         .stderr(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()?;
@@ -49,10 +101,13 @@ fn exec(_args: FixitArgs) -> CargoResult<()> {
             Ok(check) => check.message,
             _ => continue,
         };
+        let filter = if env::var("__CARGO_FIX_YOLO").is_ok() {
+            rustfix::Filter::Everything
+        } else {
+            rustfix::Filter::MachineApplicableOnly
+        };
 
-        let Some(suggestion) =
-            collect_suggestions(&diagnostic, &only, rustfix::Filter::MachineApplicableOnly)
-        else {
+        let Some(suggestion) = collect_suggestions(&diagnostic, &only, filter) else {
             trace!("rejecting as not a MachineApplicable diagnosis: {diagnostic:?}");
             if let Some(rendered) = diagnostic.rendered {
                 errors.insert(rendered);
@@ -84,6 +139,14 @@ fn exec(_args: FixitArgs) -> CargoResult<()> {
             continue;
         }
 
+        let file_path = Path::new(&file_name);
+        // Do not write into registry cache. See rust-lang/cargo#9857.
+        if let Ok(home) = env::var("CARGO_HOME") {
+            if file_path.starts_with(home) {
+                continue;
+            }
+        }
+
         file_map
             .entry(file_name)
             .or_insert_with(IndexSet::new)
@@ -92,6 +155,7 @@ fn exec(_args: FixitArgs) -> CargoResult<()> {
 
     let _exit_code = command.wait()?;
 
+    let mut made_changes = false;
     for (file, suggestions) in file_map {
         let code = match paths::read(file.as_ref()) {
             Ok(s) => s,
@@ -105,15 +169,15 @@ fn exec(_args: FixitArgs) -> CargoResult<()> {
         let mut fixed = CodeFix::new(&code);
         let mut num_fixes = 0;
 
-        for (suggestion, rendered) in suggestions {
-            match fixed.apply(&suggestion) {
+        for (suggestion, rendered) in suggestions.iter().rev() {
+            match fixed.apply(suggestion) {
                 Ok(()) => num_fixes += 1,
                 Err(rustfix::Error::AlreadyReplaced {
                     is_identical: true, ..
                 }) => {}
                 Err(e) => {
                     if let Some(rendered) = rendered {
-                        errors.insert(rendered);
+                        errors.insert(rendered.to_owned());
                     }
                     warn!("{e:?}");
                 }
@@ -123,12 +187,9 @@ fn exec(_args: FixitArgs) -> CargoResult<()> {
             eprintln!("{file}: {num_fixes} fixes");
             let new_code = fixed.finish()?;
             paths::write(&file, new_code)?;
+            made_changes = true;
         }
     }
 
-    for e in errors {
-        eprint!("{e}");
-    }
-
-    Ok(())
+    Ok((errors, made_changes))
 }
