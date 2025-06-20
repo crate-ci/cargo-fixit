@@ -6,7 +6,7 @@ use std::{
     process::Stdio,
 };
 
-use cargo_fixit::CargoResult;
+use cargo_fixit::{CargoResult, CheckFlags};
 use cargo_util::paths;
 use clap::Parser;
 use indexmap::{IndexMap, IndexSet};
@@ -16,9 +16,12 @@ use tracing::{trace, warn};
 
 #[derive(Debug, Parser)]
 pub(crate) struct FixitArgs {
-    /// Unstable (nightly-only) flags
-    #[arg(short = 'Z', value_name = "FLAG")]
-    unstable_flags: Vec<String>,
+    /// Fix code even if a VCS was not detected
+    #[arg(long)]
+    allow_no_vcs: bool,
+
+    #[command(flatten)]
+    check_flags: CheckFlags,
 }
 
 impl FixitArgs {
@@ -32,11 +35,14 @@ struct CheckMessage {
     message: Diagnostic,
 }
 
-fn exec(_args: FixitArgs) -> CargoResult<()> {
-    run_rustfix()
+fn exec(args: FixitArgs) -> CargoResult<()> {
+    if !args.allow_no_vcs {
+        warn!("support for VCS has not been implemented");
+    }
+    run_rustfix(&args)
 }
 
-fn run_rustfix() -> CargoResult<()> {
+fn run_rustfix(args: &FixitArgs) -> CargoResult<()> {
     let only = HashSet::new();
     let mut file_map = IndexMap::new();
 
@@ -44,6 +50,7 @@ fn run_rustfix() -> CargoResult<()> {
 
     let mut command = std::process::Command::new(env!("CARGO"))
         .args(["check", "--message-format", "json"])
+        .args(args.check_flags.to_flags())
         .stderr(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()?;

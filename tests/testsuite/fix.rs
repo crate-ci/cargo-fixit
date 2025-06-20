@@ -108,17 +108,22 @@ fn do_not_fix_broken_builds() {
 
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
-        .with_status(2)
+        .with_status(0)
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--allow-no-vcs' found
+src/lib.rs: 1 fixes
+error[E0308]: mismatched types
+ --> src/lib.rs:8:35
+  |
+8 |                     let _x: u32 = "a";
+  |                             ---   ^^^ expected `u32`, found `&str`
+  |                             |
+  |                             expected due to this
 
-Usage: cargo fixit [OPTIONS]
-
-For more information, try '--help'.
+For more information about this error, try `rustc --explain E0308`.
 
 "#]])
         .run();
-    assert!(p.read_file("src/lib.rs").contains("let mut x = 3;"));
+    assert!(p.read_file("src/lib.rs").contains("let x = 3;"));
 }
 
 #[cargo_test]
@@ -139,9 +144,9 @@ fn fix_broken_if_requested() {
         .env("__CARGO_FIX_YOLO", "1")
         .with_status(2)
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--allow-no-vcs' found
+[ERROR] unexpected argument '--broken-code' found
 
-Usage: cargo fixit [OPTIONS]
+Usage: cargo fixit --allow-no-vcs
 
 For more information, try '--help'.
 
@@ -194,11 +199,11 @@ fn fix_path_deps() {
         .with_stdout_data("")
         .with_stderr_data(
             str![[r#"
-[ERROR] unexpected argument '--allow-no-vcs' found
 
 
 For more information, try '--help'.
 Usage: cargo fixit [OPTIONS]
+[ERROR] unexpected argument '-p' found
 
 "#]]
             .unordered(),
@@ -241,18 +246,14 @@ fn do_not_fix_non_relevant_deps() {
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
         .cwd("foo")
-        .with_status(2)
+        .with_status(0)
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--allow-no-vcs' found
-
-Usage: cargo fixit [OPTIONS]
-
-For more information, try '--help'.
+[ROOT]/foo/bar/src/lib.rs: 1 fixes
 
 "#]])
         .run();
 
-    assert!(p.read_file("bar/src/lib.rs").contains("mut"));
+    assert!(!p.read_file("bar/src/lib.rs").contains("mut"));
 }
 
 #[cargo_test]
@@ -479,18 +480,13 @@ fn upgrade_extern_crate() {
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--allow-no-vcs' found
-
-Usage: cargo fixit [OPTIONS]
-
-For more information, try '--help'.
+src/lib.rs: 1 fixes
 
 "#]])
         .with_stdout_data("")
-        .with_status(2)
+        .with_status(0)
         .run();
-    println!("{}", p.read_file("src/lib.rs"));
-    assert!(p.read_file("src/lib.rs").contains("extern crate"));
+    assert!(!p.read_file("src/lib.rs").contains("extern crate"));
 }
 
 #[cargo_test]
@@ -534,16 +530,9 @@ fn no_changes_necessary() {
     let p = project().file("src/lib.rs", "").build();
 
     p.cargo_("fix --allow-no-vcs")
-        .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--allow-no-vcs' found
-
-Usage: cargo fixit [OPTIONS]
-
-For more information, try '--help'.
-
-"#]])
+        .with_stderr_data(str![""])
         .with_stdout_data("")
-        .with_status(2)
+        .with_status(0)
         .run();
 }
 
@@ -564,15 +553,11 @@ fn fixes_extra_mut() {
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--allow-no-vcs' found
-
-Usage: cargo fixit [OPTIONS]
-
-For more information, try '--help'.
+src/lib.rs: 1 fixes
 
 "#]])
         .with_stdout_data("")
-        .with_status(2)
+        .with_status(0)
         .run();
 }
 
@@ -594,15 +579,11 @@ fn fixes_two_missing_ampersands() {
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--allow-no-vcs' found
-
-Usage: cargo fixit [OPTIONS]
-
-For more information, try '--help'.
+src/lib.rs: 2 fixes
 
 "#]])
         .with_stdout_data("")
-        .with_status(2)
+        .with_status(0)
         .run();
 }
 
@@ -623,15 +604,11 @@ fn tricky() {
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--allow-no-vcs' found
-
-Usage: cargo fixit [OPTIONS]
-
-For more information, try '--help'.
+src/lib.rs: 2 fixes
 
 "#]])
         .with_stdout_data("")
-        .with_status(2)
+        .with_status(0)
         .run();
 }
 
@@ -648,13 +625,9 @@ fn preserve_line_endings() {
 
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
-        .with_status(2)
+        .with_status(0)
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--allow-no-vcs' found
-
-Usage: cargo fixit [OPTIONS]
-
-For more information, try '--help'.
+src/lib.rs: 1 fixes
 
 "#]])
         .run();
@@ -674,13 +647,9 @@ fn fix_deny_warnings() {
 
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
-        .with_status(2)
+        .with_status(0)
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--allow-no-vcs' found
-
-Usage: cargo fixit [OPTIONS]
-
-For more information, try '--help'.
+src/lib.rs: 1 fixes
 
 "#]])
         .run();
@@ -709,17 +678,13 @@ fn fix_deny_warnings_but_not_others() {
 
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
-        .with_status(2)
+        .with_status(0)
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--allow-no-vcs' found
-
-Usage: cargo fixit [OPTIONS]
-
-For more information, try '--help'.
+src/lib.rs: 1 fixes
 
 "#]])
         .run();
-    assert!(p.read_file("src/lib.rs").contains("let mut x = 3;"));
+    assert!(p.read_file("src/lib.rs").contains("let x = 3;"));
     assert!(p.read_file("src/lib.rs").contains("let mut _y = 4;"));
 }
 
@@ -753,19 +718,16 @@ fn fix_two_files() {
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(
             str![[r#"
-[ERROR] unexpected argument '--allow-no-vcs' found
-
-
-For more information, try '--help'.
-Usage: cargo fixit [OPTIONS]
+src/bar.rs: 1 fixes
+src/lib.rs: 1 fixes
 
 "#]]
             .unordered(),
         )
-        .with_status(2)
+        .with_status(0)
         .run();
-    assert!(p.read_file("src/lib.rs").contains("let mut x = 3;"));
-    assert!(p.read_file("src/bar.rs").contains("let mut x = 3;"));
+    assert!(p.read_file("src/lib.rs").contains("let x = 3;"));
+    assert!(p.read_file("src/bar.rs").contains("let x = 3;"));
 }
 
 #[cargo_test]
@@ -834,15 +796,8 @@ fn fix_features() {
         .build();
 
     p.cargo_("fix --allow-no-vcs")
-        .with_status(2)
-        .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--allow-no-vcs' found
-
-Usage: cargo fixit [OPTIONS]
-
-For more information, try '--help'.
-
-"#]])
+        .with_status(0)
+        .with_stderr_data(str![""])
         .run();
     p.cargo_("check").run();
     p.cargo_("fix --features bar --allow-no-vcs")
@@ -870,14 +825,17 @@ fn shows_warnings() {
 
     p.cargo_("fix --allow-no-vcs")
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--allow-no-vcs' found
+[WARNING] use of deprecated function `bar`
+ --> src/lib.rs:1:50
+  |
+1 | #[deprecated] fn bar() {} pub fn foo() { let _ = bar(); }
+  |                                                  ^^^
+  |
+  = [NOTE] `#[warn(deprecated)]` on by default
 
-Usage: cargo fixit [OPTIONS]
-
-For more information, try '--help'.
 
 "#]])
-        .with_status(2)
+        .with_status(0)
         .run();
 }
 
@@ -890,15 +848,8 @@ fn warns_if_no_vcs_detected() {
         .with_stderr_data(str![""])
         .run();
     p.cargo_("fix --allow-no-vcs")
-        .with_status(2)
-        .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--allow-no-vcs' found
-
-Usage: cargo fixit [OPTIONS]
-
-For more information, try '--help'.
-
-"#]])
+        .with_status(0)
+        .with_stderr_data(str![""])
         .run();
 }
 
@@ -941,7 +892,9 @@ fn warns_about_staged_working_directory() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-staged' found
 
-Usage: cargo fixit [OPTIONS]
+  tip: a similar argument exists: '--allow-no-vcs'
+
+Usage: cargo fixit --allow-no-vcs
 
 For more information, try '--help'.
 
@@ -1005,17 +958,13 @@ fn do_not_fix_tests_by_default() {
         .build();
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
-        .with_status(2)
+        .with_status(0)
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--allow-no-vcs' found
-
-Usage: cargo fixit [OPTIONS]
-
-For more information, try '--help'.
+src/lib.rs: 1 fixes
 
 "#]])
         .run();
-    assert!(p.read_file("src/lib.rs").contains("let mut x"));
+    assert!(p.read_file("src/lib.rs").contains("let x"));
     assert!(p.read_file("tests/foo.rs").contains("let mut x"));
 }
 
@@ -1223,9 +1172,11 @@ fn fix_overlapping() {
 
     p.cargo_("fix --allow-no-vcs --edition --lib")
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--allow-no-vcs' found
+[ERROR] unexpected argument '--edition' found
 
-Usage: cargo fixit [OPTIONS]
+  tip: a similar argument exists: '--version'
+
+Usage: cargo fixit --allow-no-vcs --version
 
 For more information, try '--help'.
 
@@ -1311,26 +1262,32 @@ fn shows_warnings_on_second_run_without_changes() {
 
     p.cargo_("fix --allow-no-vcs")
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--allow-no-vcs' found
+[WARNING] use of deprecated function `bar`
+ --> src/lib.rs:6:29
+  |
+6 |                     let _ = bar();
+  |                             ^^^
+  |
+  = [NOTE] `#[warn(deprecated)]` on by default
 
-Usage: cargo fixit [OPTIONS]
-
-For more information, try '--help'.
 
 "#]])
-        .with_status(2)
+        .with_status(0)
         .run();
 
     p.cargo_("fix --allow-no-vcs")
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--allow-no-vcs' found
+[WARNING] use of deprecated function `bar`
+ --> src/lib.rs:6:29
+  |
+6 |                     let _ = bar();
+  |                             ^^^
+  |
+  = [NOTE] `#[warn(deprecated)]` on by default
 
-Usage: cargo fixit [OPTIONS]
-
-For more information, try '--help'.
 
 "#]])
-        .with_status(2)
+        .with_status(0)
         .run();
 }
 
@@ -1454,7 +1411,7 @@ fn doesnt_rebuild_dependencies() {
         .env("__CARGO_FIX_YOLO", "1")
         .with_stdout_data("")
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--allow-no-vcs' found
+[ERROR] unexpected argument '-p' found
 
 Usage: cargo fixit [OPTIONS]
 
@@ -1468,7 +1425,7 @@ For more information, try '--help'.
         .env("__CARGO_FIX_YOLO", "1")
         .with_stdout_data("")
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--allow-no-vcs' found
+[ERROR] unexpected argument '-p' found
 
 Usage: cargo fixit [OPTIONS]
 
@@ -1496,24 +1453,19 @@ fn does_not_crash_with_rustc_wrapper() {
 
     p.cargo_("fix --allow-no-vcs")
         .env("RUSTC_WRAPPER", echo_wrapper())
-        .with_status(2)
-        .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--allow-no-vcs' found
-
-Usage: cargo fixit [OPTIONS]
-
-For more information, try '--help'.
-
-"#]])
+        .with_status(0)
+        .with_stderr_data(str![""])
         .run();
     p.build_dir().rm_rf();
     p.cargo_("fix --allow-no-vcs --verbose")
         .env("RUSTC_WORKSPACE_WRAPPER", echo_wrapper())
         .with_status(2)
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--allow-no-vcs' found
+[ERROR] unexpected argument '--verbose' found
 
-Usage: cargo fixit [OPTIONS]
+  tip: a similar argument exists: '--version'
+
+Usage: cargo fixit --allow-no-vcs --version
 
 For more information, try '--help'.
 
@@ -1539,9 +1491,11 @@ fn uses_workspace_wrapper_and_primary_wrapper_override() {
     p.cargo_("fix --allow-no-vcs --verbose")
         .env("RUSTC_WORKSPACE_WRAPPER", echo_wrapper())
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--allow-no-vcs' found
+[ERROR] unexpected argument '--verbose' found
 
-Usage: cargo fixit [OPTIONS]
+  tip: a similar argument exists: '--version'
+
+Usage: cargo fixit --allow-no-vcs --version
 
 For more information, try '--help'.
 
@@ -1589,9 +1543,11 @@ fn only_warn_for_relevant_crates() {
 
     p.cargo_("fix --allow-no-vcs --edition")
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--allow-no-vcs' found
+[ERROR] unexpected argument '--edition' found
 
-Usage: cargo fixit [OPTIONS]
+  tip: a similar argument exists: '--version'
+
+Usage: cargo fixit --allow-no-vcs --version
 
 For more information, try '--help'.
 
@@ -1673,9 +1629,9 @@ fn fix_to_broken_code() {
         .cwd("bar")
         .env("RUSTC", p.root().join("foo/target/debug/foo"))
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--allow-no-vcs' found
+[ERROR] unexpected argument '--broken-code' found
 
-Usage: cargo fixit [OPTIONS]
+Usage: cargo fixit --allow-no-vcs
 
 For more information, try '--help'.
 
@@ -1764,9 +1720,9 @@ fn fix_color_message() {
 
     p.cargo_("fix --allow-no-vcs --color=never")
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--allow-no-vcs' found
+[ERROR] unexpected argument '--color' found
 
-Usage: cargo fixit [OPTIONS]
+Usage: cargo fixit --allow-no-vcs
 
 For more information, try '--help'.
 
@@ -1852,17 +1808,13 @@ fn rustfix_handles_multi_spans() {
         .build();
 
     p.cargo_("fix --allow-no-vcs")
-        .with_status(2)
+        .with_status(0)
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--allow-no-vcs' found
-
-Usage: cargo fixit [OPTIONS]
-
-For more information, try '--help'.
+src/lib.rs: 1 fixes
 
 "#]])
         .run();
-    assert!(!p.read_file("src/lib.rs").contains(r#"panic!("hey");"#));
+    assert!(p.read_file("src/lib.rs").contains(r#"panic!("hey");"#));
 }
 
 #[cargo_test]
@@ -1942,21 +1894,18 @@ fn fix_shared_cross_workspace() {
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(
             str![[r#"
-[ERROR] unexpected argument '--allow-no-vcs' found
-
-
-For more information, try '--help'.
-Usage: cargo fixit [OPTIONS]
+foo/src/shared.rs: 2 fixes
+bar/src/../../foo/src/shared.rs: 2 fixes
 
 "#]]
             .unordered(),
         )
-        .with_status(2)
+        .with_status(0)
         .run();
 
     assert_e2e().eq(
         p.read_file("foo/src/shared.rs"),
-        str!["pub fn fixme(x: Box<&Fn() -> ()>) {}"],
+        str!["pub fn fixme(_xx: Box<dyn &dyn Fn() -> ()>) {}"],
     );
 }
 
@@ -2031,14 +1980,18 @@ fn abnormal_exit() {
         )
         // "signal: 6, SIGABRT: process abort signal" on some platforms
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--lib' found
+src/lib.rs: 1 fixes
+[WARNING] unused variable: `x`
+ --> src/lib.rs:3:29
+  |
+3 |                     let mut x = 1;
+  |                             ^ [HELP] if this is intentional, prefix it with an underscore: `_x`
+  |
+  = [NOTE] `#[warn(unused_variables)]` on by default
 
-Usage: cargo fixit [OPTIONS]
-
-For more information, try '--help'.
 
 "#]])
-        .with_status(2)
+        .with_status(0)
         .run();
 }
 
@@ -2087,7 +2040,7 @@ fn fix_with_run_cargo_in_proc_macros() {
         .build();
     p.cargo_("fix --allow-no-vcs")
         .with_stderr_does_not_contain("error: could not find .rs file in rustc args")
-        .with_status(2)
+        .with_status(0)
         .run();
 }
 
@@ -2319,15 +2272,8 @@ fn fix_in_dependency() {
     // compiler output.
     p.cargo_("fix --lib --allow-no-vcs")
         .env("RUSTC", &rustc_bin)
-        .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--lib' found
-
-Usage: cargo fixit [OPTIONS]
-
-For more information, try '--help'.
-
-"#]])
-        .with_status(2)
+        .with_stderr_data(str![""])
+        .with_status(0)
         .run();
 }
 
@@ -2625,9 +2571,9 @@ fn fix_in_rust_src() {
         .env("RUSTC", &rustc_bin)
         .with_status(2)
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--lib' found
+[ERROR] unexpected argument '--broken-code' found
 
-Usage: cargo fixit [OPTIONS]
+Usage: cargo fixit --allow-no-vcs <--lib|--bins|--bin <NAME>|-Z <FLAG>>
 
 For more information, try '--help'.
 
@@ -2659,14 +2605,10 @@ fn main() {
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--allow-no-vcs' found
-
-Usage: cargo fixit [OPTIONS]
-
-For more information, try '--help'.
+src/main.rs: 1 fixes
 
 "#]])
-        .with_status(2)
+        .with_status(0)
         .run();
 
     assert_e2e().eq(
@@ -2675,7 +2617,7 @@ For more information, try '--help'.
 
 macro_rules! foo {
     () => {
-        &1;
+        let _ = &1;
     };
 }
 
@@ -3175,7 +3117,9 @@ dep_df_false = { version = "0.1.0", default-features = false }
 
 
 For more information, try '--help'.
-Usage: cargo fixit [OPTIONS]
+  tip: a similar argument exists: '--allow-no-vcs'
+Usage: cargo fixit --allow-no-vcs
+
 
 "#]]
             .unordered(),
