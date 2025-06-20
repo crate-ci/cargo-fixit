@@ -2,6 +2,7 @@ use std::{
     collections::HashSet,
     env,
     io::{BufRead, BufReader},
+    path::Path,
     process::Stdio,
 };
 
@@ -90,6 +91,14 @@ fn run_rustfix() -> CargoResult<()> {
                 errors.insert(rendered);
             }
             continue;
+        }
+
+        let file_path = Path::new(&file_name);
+        // Do not write into registry cache. See rust-lang/cargo#9857.
+        if let Ok(home) = env::var("CARGO_HOME") {
+            if file_path.starts_with(home) {
+                continue;
+            }
         }
 
         file_map
