@@ -364,10 +364,7 @@ fn fix_overlapping_max() {
         ],
         |_execs| {},
         str![[r#"
-src/lib.rs: 1 fixes
-src/lib.rs: 1 fixes
-src/lib.rs: 1 fixes
-src/lib.rs: 1 fixes
+src/lib.rs: 4 fixes
 rustc fix shim comment 5
 rustc fix shim comment 6
 

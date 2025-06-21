@@ -1894,12 +1894,6 @@ fn fix_shared_cross_workspace() {
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(
             str![[r#"
-foo/src/shared.rs: 2 fixes
-bar/src/../../foo/src/shared.rs: 2 fixes
-foo/src/shared.rs: 1 fixes
-bar/src/../../foo/src/shared.rs: 1 fixes
-bar/src/../../foo/src/shared.rs: 1 fixes
-foo/src/shared.rs: 1 fixes
 [ERROR] expected parameter name, found `,`
  --> bar/src/../../foo/src/shared.rs:1:28
   |
@@ -1937,6 +1931,8 @@ error[E0412]: cannot find type `dyn` in this scope
 1 | pub fn fixme(_xx: Box<dyn>,,> &dyn Fn() -> ()>) {}
   |                       ^^^ not found in this scope
 
+bar/src/../../foo/src/shared.rs: 4 fixes
+foo/src/shared.rs: 4 fixes
 
 "#]]
             .unordered(),

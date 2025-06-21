@@ -35,30 +35,37 @@ struct CheckMessage {
     message: Diagnostic,
 }
 
+#[derive(Debug, Default)]
+struct File {
+    fixes: u32,
+}
+
 fn exec(args: FixitArgs) -> CargoResult<()> {
     if !args.allow_no_vcs {
         warn!("support for VCS has not been implemented");
     }
+    let mut files = IndexMap::new();
 
     let max_iterations: usize = env::var("CARGO_FIX_MAX_RETRIES")
         .ok()
         .and_then(|i| i.parse().ok())
         .unwrap_or(4);
-    let mut early_exit = false;
+
+    let mut last_errors = IndexSet::new();
+    let mut last_made_changes = false;
 
     for _ in 0..max_iterations {
-        let (errors, made_changes) = run_rustfix(&args)?;
+        (last_errors, last_made_changes) = run_rustfix(&args, &mut files)?;
 
-        if !made_changes {
-            for e in errors {
-                eprint!("{e}");
-            }
-            early_exit = true;
+        if !last_made_changes {
             break;
         }
     }
+    for (name, file) in files {
+        eprintln!("{name}: {} fixes", file.fixes);
+    }
 
-    if !early_exit {
+    if last_made_changes {
         let only = HashSet::new();
         let output = std::process::Command::new(env!("CARGO"))
             .args(["check", "--message-format", "json"])
@@ -76,12 +83,19 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
                 }
             };
         }
+    } else {
+        for e in last_errors {
+            eprint!("{e}");
+        }
     }
 
     Ok(())
 }
 
-fn run_rustfix(args: &FixitArgs) -> CargoResult<(IndexSet<String>, bool)> {
+fn run_rustfix(
+    args: &FixitArgs,
+    files: &mut IndexMap<String, File>,
+) -> CargoResult<(IndexSet<String>, bool)> {
     let only = HashSet::new();
     let mut file_map = IndexMap::new();
 
@@ -184,10 +198,10 @@ fn run_rustfix(args: &FixitArgs) -> CargoResult<(IndexSet<String>, bool)> {
             }
         }
         if fixed.modified() {
-            eprintln!("{file}: {num_fixes} fixes");
             let new_code = fixed.finish()?;
             paths::write(&file, new_code)?;
             made_changes = true;
+            files.entry(file).or_default().fixes += num_fixes;
         }
     }
 
