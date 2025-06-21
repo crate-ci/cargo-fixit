@@ -110,7 +110,7 @@ fn do_not_fix_broken_builds() {
         .env("__CARGO_FIX_YOLO", "1")
         .with_status(0)
         .with_stderr_data(str![[r#"
-src/lib.rs: 1 fixes
+[FIXED] src/lib.rs (1 fix)
 error[E0308]: mismatched types
  --> src/lib.rs:8:35
   |
@@ -248,7 +248,7 @@ fn do_not_fix_non_relevant_deps() {
         .cwd("foo")
         .with_status(0)
         .with_stderr_data(str![[r#"
-[ROOT]/foo/bar/src/lib.rs: 1 fixes
+[FIXED] [ROOT]/foo/bar/src/lib.rs (1 fix)
 
 "#]])
         .run();
@@ -480,7 +480,7 @@ fn upgrade_extern_crate() {
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(str![[r#"
-src/lib.rs: 1 fixes
+[FIXED] src/lib.rs (1 fix)
 
 "#]])
         .with_stdout_data("")
@@ -553,7 +553,7 @@ fn fixes_extra_mut() {
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(str![[r#"
-src/lib.rs: 1 fixes
+[FIXED] src/lib.rs (1 fix)
 
 "#]])
         .with_stdout_data("")
@@ -579,7 +579,7 @@ fn fixes_two_missing_ampersands() {
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(str![[r#"
-src/lib.rs: 2 fixes
+[FIXED] src/lib.rs (2 fixes)
 
 "#]])
         .with_stdout_data("")
@@ -604,7 +604,7 @@ fn tricky() {
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(str![[r#"
-src/lib.rs: 2 fixes
+[FIXED] src/lib.rs (2 fixes)
 
 "#]])
         .with_stdout_data("")
@@ -627,7 +627,7 @@ fn preserve_line_endings() {
         .env("__CARGO_FIX_YOLO", "1")
         .with_status(0)
         .with_stderr_data(str![[r#"
-src/lib.rs: 1 fixes
+[FIXED] src/lib.rs (1 fix)
 
 "#]])
         .run();
@@ -649,7 +649,7 @@ fn fix_deny_warnings() {
         .env("__CARGO_FIX_YOLO", "1")
         .with_status(0)
         .with_stderr_data(str![[r#"
-src/lib.rs: 1 fixes
+[FIXED] src/lib.rs (1 fix)
 
 "#]])
         .run();
@@ -680,7 +680,7 @@ fn fix_deny_warnings_but_not_others() {
         .env("__CARGO_FIX_YOLO", "1")
         .with_status(0)
         .with_stderr_data(str![[r#"
-src/lib.rs: 1 fixes
+[FIXED] src/lib.rs (1 fix)
 
 "#]])
         .run();
@@ -718,8 +718,8 @@ fn fix_two_files() {
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(
             str![[r#"
-src/bar.rs: 1 fixes
-src/lib.rs: 1 fixes
+[FIXED] src/bar.rs (1 fix)
+[FIXED] src/lib.rs (1 fix)
 
 "#]]
             .unordered(),
@@ -845,7 +845,10 @@ fn warns_if_no_vcs_detected() {
 
     p.cargo_("fix")
         .with_status(0)
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[WARNING] support for VCS has not been implemented
+
+"#]])
         .run();
     p.cargo_("fix --allow-no-vcs")
         .with_status(0)
@@ -861,7 +864,10 @@ fn warns_about_dirty_working_directory() {
 
     p.cargo_("fix")
         .with_status(0)
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[WARNING] support for VCS has not been implemented
+
+"#]])
         .run();
     p.cargo_("fix --allow-dirty")
         .with_status(2)
@@ -885,7 +891,10 @@ fn warns_about_staged_working_directory() {
 
     p.cargo_("fix")
         .with_status(0)
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[WARNING] support for VCS has not been implemented
+
+"#]])
         .run();
     p.cargo_("fix --allow-staged")
         .with_status(2)
@@ -911,7 +920,10 @@ fn errors_about_untracked_files() {
 
     p.cargo_("fix")
         .with_status(0)
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[WARNING] support for VCS has not been implemented
+
+"#]])
         .run();
     p.cargo_("fix --allow-dirty")
         .with_status(2)
@@ -931,7 +943,10 @@ fn does_not_warn_about_clean_working_directory() {
     let p = git::new("foo", |p| p.file("src/lib.rs", "pub fn foo() {}"));
     p.cargo_("fix")
         .with_status(0)
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[WARNING] support for VCS has not been implemented
+
+"#]])
         .run();
 }
 
@@ -946,7 +961,10 @@ fn does_not_warn_about_dirty_ignored_files() {
 
     p.cargo_("fix")
         .with_status(0)
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[WARNING] support for VCS has not been implemented
+
+"#]])
         .run();
 }
 
@@ -960,7 +978,7 @@ fn do_not_fix_tests_by_default() {
         .env("__CARGO_FIX_YOLO", "1")
         .with_status(0)
         .with_stderr_data(str![[r#"
-src/lib.rs: 1 fixes
+[FIXED] src/lib.rs (1 fix)
 
 "#]])
         .run();
@@ -1689,20 +1707,29 @@ fn fix_in_existing_repo_weird_ignore() {
 
     p.cargo_("fix")
         .with_status(0)
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[WARNING] support for VCS has not been implemented
+
+"#]])
         .run();
     // This is questionable about whether it is the right behavior. It should
     // probably be checking if any source file for the current project is
     // ignored.
     p.cargo_("fix")
         .cwd("inner")
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[WARNING] support for VCS has not been implemented
+
+"#]])
         .with_status(0)
         .run();
     p.cargo_("fix")
         .cwd("src")
         .with_status(0)
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[WARNING] support for VCS has not been implemented
+
+"#]])
         .run();
 }
 
@@ -1810,7 +1837,7 @@ fn rustfix_handles_multi_spans() {
     p.cargo_("fix --allow-no-vcs")
         .with_status(0)
         .with_stderr_data(str![[r#"
-src/lib.rs: 1 fixes
+[FIXED] src/lib.rs (1 fix)
 
 "#]])
         .run();
@@ -1931,8 +1958,8 @@ error[E0412]: cannot find type `dyn` in this scope
 1 | pub fn fixme(_xx: Box<dyn>,,> &dyn Fn() -> ()>) {}
   |                       ^^^ not found in this scope
 
-bar/src/../../foo/src/shared.rs: 4 fixes
-foo/src/shared.rs: 4 fixes
+[FIXED] bar/src/../../foo/src/shared.rs (4 fixes)
+[FIXED] foo/src/shared.rs (4 fixes)
 
 "#]]
             .unordered(),
@@ -2017,7 +2044,7 @@ fn abnormal_exit() {
         )
         // "signal: 6, SIGABRT: process abort signal" on some platforms
         .with_stderr_data(str![[r#"
-src/lib.rs: 1 fixes
+[FIXED] src/lib.rs (1 fix)
 
 "#]])
         .with_status(0)
@@ -2634,7 +2661,7 @@ fn main() {
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(str![[r#"
-src/main.rs: 1 fixes
+[FIXED] src/main.rs (1 fix)
 
 "#]])
         .with_status(0)
@@ -3276,7 +3303,10 @@ fn fix_edition_future() {
 
     p.cargo_("fix -Zfix-edition=end=2024,future")
         .masquerade_as_nightly_cargo(&["fix-edition"])
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[WARNING] support for VCS has not been implemented
+
+"#]])
         .with_status(0)
         .run();
     assert_e2e().eq(

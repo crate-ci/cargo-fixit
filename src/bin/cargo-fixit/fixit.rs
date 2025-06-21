@@ -6,7 +6,7 @@ use std::{
     process::Stdio,
 };
 
-use cargo_fixit::{CargoResult, CheckFlags};
+use cargo_fixit::{shell, CargoResult, CheckFlags};
 use cargo_util::paths;
 use clap::Parser;
 use indexmap::{IndexMap, IndexSet};
@@ -42,7 +42,7 @@ struct File {
 
 fn exec(args: FixitArgs) -> CargoResult<()> {
     if !args.allow_no_vcs {
-        warn!("support for VCS has not been implemented");
+        shell::warn("support for VCS has not been implemented")?;
     }
     let mut files = IndexMap::new();
 
@@ -62,7 +62,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
         }
     }
     for (name, file) in files {
-        eprintln!("{name}: {} fixes", file.fixes);
+        shell::fixed(name, file.fixes)?;
     }
 
     if last_made_changes {
