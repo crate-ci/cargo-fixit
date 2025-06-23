@@ -1,5 +1,5 @@
 use cargo_test_macro::cargo_test;
-use cargo_test_support::{compare::assert_ui, project};
+use cargo_test_support::{basic_manifest, compare::assert_ui, project};
 use snapbox::str;
 
 use crate::fix::FixitProject;
@@ -84,4 +84,62 @@ fn fixable_and_unfixable() {
             
 "#]],
     );
+}
+
+#[cargo_test]
+fn dependency_order() {
+    let p = project()
+        .file(
+            "Cargo.toml",
+            r#"
+            [workspace]
+            members = [ "a", "b", "c", "d" ]
+            "#,
+        )
+        .file(
+            "a/Cargo.toml",
+            r#"
+                [package]
+                name = "a"
+                version = "0.1.0"
+                edition = "2024"
+
+                [dependencies]
+                b = { path = "../b" }
+                c = { path = "../c" }
+            "#,
+        )
+        .file("a/src/lib.rs", "use std as foo;")
+        .file(
+            "b/Cargo.toml",
+            r#"
+                [package]
+                name = "b"
+                version = "0.1.0"
+                edition = "2024"
+
+                [dependencies]
+                d = { path = "../d" }
+            "#,
+        )
+        .file("b/src/lib.rs", "use std as foo;")
+        .file("c/Cargo.toml", &basic_manifest("c", "0.1.0"))
+        .file("c/src/lib.rs", "use std as foo;")
+        .file("d/Cargo.toml", &basic_manifest("d", "0.1.0"))
+        .file("d/src/lib.rs", "use std as foo;")
+        .build();
+
+    p.cargo_("build").with_status(0).run();
+    p.cargo_("fixit --allow-no-vcs")
+        .with_status(0)
+        .with_stderr_data(str![[r#"
+...
+[FIXED] d/src/lib.rs (1 fix)
+...
+[FIXED] b/src/lib.rs (1 fix)
+...
+[FIXED] a/src/lib.rs (1 fix)
+
+"#]])
+        .run();
 }
