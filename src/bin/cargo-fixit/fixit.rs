@@ -79,13 +79,13 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
             };
             if collect_suggestions(&diagnostic, &only, rustfix::Filter::Everything).is_some() {
                 if let Some(rendered) = diagnostic.rendered {
-                    eprintln!("{rendered}");
+                    eprint!("{}\n\n", rendered.trim_end());
                 }
             };
         }
     } else {
         for e in last_errors {
-            eprint!("{e}");
+            eprint!("{}\n\n", e.trim_end());
         }
     }
 

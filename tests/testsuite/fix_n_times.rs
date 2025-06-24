@@ -366,7 +366,9 @@ fn fix_overlapping_max() {
         str![[r#"
 [FIXED] src/lib.rs (4 fixes)
 rustc fix shim comment 5
+
 rustc fix shim comment 6
+
 
 "#]],
         "// fix-count 5",
@@ -384,6 +386,8 @@ fn fix_verification_failed() {
         str![[r#"
 [FIXED] src/lib.rs (1 fix)
 rustc fix shim error count=2
+
+
 "#]],
         "// fix-count 1",
         0,
@@ -403,6 +407,8 @@ fn fix_verification_failed_clippy() {
         str![[r#"
 [FIXED] src/lib.rs (1 fix)
 rustc fix shim error count=2
+
+
 "#]],
         "// fix-count 1",
         0,
@@ -415,7 +421,11 @@ fn warnings() {
     expect_fix_runs_rustc_n_times(
         &[Step::Warning],
         |_execs| {},
-        str!["rustc fix shim warning count=1"],
+        str![[r#"
+rustc fix shim warning count=1
+
+
+"#]],
         "// fix-count 0",
         0,
     );
@@ -427,7 +437,11 @@ fn starts_with_error() {
     expect_fix_runs_rustc_n_times(
         &[Step::Error],
         |_execs| {},
-        str!["rustc fix shim error count=1"],
+        str![[r#"
+rustc fix shim error count=1
+
+
+"#]],
         "// fix-count 0",
         0,
     );

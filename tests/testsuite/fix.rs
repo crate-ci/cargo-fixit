@@ -121,6 +121,7 @@ error[E0308]: mismatched types
 
 For more information about this error, try `rustc --explain E0308`.
 
+
 "#]])
         .run();
     assert!(p.read_file("src/lib.rs").contains("let x = 3;"));
@@ -1960,6 +1961,7 @@ error[E0412]: cannot find type `dyn` in this scope
 
 [FIXED] bar/src/../../foo/src/shared.rs (4 fixes)
 [FIXED] foo/src/shared.rs (4 fixes)
+
 
 "#]]
             .unordered(),
