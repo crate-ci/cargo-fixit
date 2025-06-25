@@ -33,6 +33,7 @@ impl FixitArgs {
 #[derive(Deserialize)]
 struct CheckMessage {
     message: Diagnostic,
+    package_id: String,
 }
 
 #[derive(Debug, Default)]
@@ -50,43 +51,36 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
         .ok()
         .and_then(|i| i.parse().ok())
         .unwrap_or(4);
+    let mut iteration = 0;
 
-    let mut last_errors = IndexSet::new();
-    let mut last_made_changes = false;
+    let mut last_errors;
 
-    for _ in 0..max_iterations {
-        (last_errors, last_made_changes) = run_rustfix(&args, &mut files)?;
+    let mut current_package_id = None;
+    let mut seen = HashSet::new();
 
-        if !last_made_changes {
-            break;
+    loop {
+        let (errors, made_changes) =
+            run_rustfix(&args, &mut files, &mut current_package_id, &seen)?;
+
+        last_errors = errors;
+        iteration += 1;
+
+        if !made_changes || iteration >= max_iterations {
+            if let Some(pkg) = current_package_id {
+                seen.insert(pkg);
+                current_package_id = None;
+                iteration = 0;
+            } else {
+                break;
+            }
         }
     }
     for (name, file) in files {
         shell::fixed(name, file.fixes)?;
     }
 
-    if last_made_changes {
-        let only = HashSet::new();
-        let output = std::process::Command::new(env!("CARGO"))
-            .args(["check", "--message-format", "json"])
-            .stderr(Stdio::piped())
-            .stdout(Stdio::piped())
-            .output()?;
-        for line in String::from_utf8(output.stdout)?.lines() {
-            let diagnostic = match serde_json::from_str::<CheckMessage>(line) {
-                Ok(check) => check.message,
-                _ => continue,
-            };
-            if collect_suggestions(&diagnostic, &only, rustfix::Filter::Everything).is_some() {
-                if let Some(rendered) = diagnostic.rendered {
-                    eprint!("{}\n\n", rendered.trim_end());
-                }
-            };
-        }
-    } else {
-        for e in last_errors {
-            eprint!("{}\n\n", e.trim_end());
-        }
+    for e in last_errors {
+        eprint!("{}\n\n", e.trim_end());
     }
 
     Ok(())
@@ -95,6 +89,8 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
 fn run_rustfix(
     args: &FixitArgs,
     files: &mut IndexMap<String, File>,
+    current_package_id: &mut Option<String>,
+    seen: &HashSet<String>,
 ) -> CargoResult<(IndexSet<String>, bool)> {
     let only = HashSet::new();
     let mut file_map = IndexMap::new();
@@ -111,9 +107,12 @@ fn run_rustfix(
     let buf = BufReader::new(command.stdout.take().expect("could not capture output"));
 
     for line in buf.lines() {
-        let diagnostic = match serde_json::from_str::<CheckMessage>(&line?) {
-            Ok(check) => check.message,
-            _ => continue,
+        let Ok(CheckMessage {
+            message: diagnostic,
+            package_id,
+        }) = serde_json::from_str(&line?)
+        else {
+            continue;
         };
         let filter = if env::var("__CARGO_FIX_YOLO").is_ok() {
             rustfix::Filter::Everything
@@ -161,10 +160,26 @@ fn run_rustfix(
             }
         }
 
-        file_map
-            .entry(file_name)
-            .or_insert_with(IndexSet::new)
-            .insert((suggestion, diagnostic.rendered));
+        if seen.contains(&package_id) {
+            trace!(
+                "rejecting package id `{}` already seen: {:?}",
+                package_id,
+                suggestion,
+            );
+            if let Some(rendered) = diagnostic.rendered {
+                errors.insert(rendered);
+            }
+            continue;
+        }
+
+        let current_package_id = current_package_id.get_or_insert(package_id.clone());
+
+        if current_package_id == &package_id {
+            file_map
+                .entry(file_name)
+                .or_insert_with(IndexSet::new)
+                .insert((suggestion, diagnostic.rendered));
+        }
     }
 
     let _exit_code = command.wait()?;
