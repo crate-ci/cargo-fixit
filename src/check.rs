@@ -58,6 +58,23 @@ pub struct CheckFlags {
     #[arg(long, help_heading = "Target Selection")]
     all_targets: bool,
 
+    /// Space or comma separated list of features to activate
+    #[arg(
+        short = 'F',
+        long,
+        value_name = "FEATURES",
+        help_heading = "Feature Selection"
+    )]
+    features: Vec<String>,
+
+    /// Activate all available features
+    #[arg(long, help_heading = "Feature Selection")]
+    all_features: bool,
+
+    /// Do not activate the `default` feature
+    #[arg(long, help_heading = "Feature Selection")]
+    no_default_features: bool,
+
     /// Unstable (nightly-only) flags
     #[arg(short = 'Z', value_name = "FLAG")]
     unstable_flags: Vec<String>,
@@ -120,6 +137,17 @@ impl CheckFlags {
 
         if self.all_targets {
             out.push("--all-targets".to_owned());
+        }
+
+        for i in self.features.clone() {
+            out.push("--features".to_owned());
+            out.push(i);
+        }
+        if self.all_features {
+            out.push("--all-features".to_owned());
+        }
+        if self.no_default_features {
+            out.push("--no-default-features".to_owned());
         }
 
         for i in self.unstable_flags.clone() {

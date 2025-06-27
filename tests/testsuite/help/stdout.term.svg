@@ -1,4 +1,4 @@
-<svg width="740px" height="524px" xmlns="http://www.w3.org/2000/svg">
+<svg width="740px" height="614px" xmlns="http://www.w3.org/2000/svg">
   <style>
     .fg { fill: #AAAAAA }
     .bg { background: #000000 }
@@ -71,6 +71,16 @@
     <tspan x="10px" y="496px"><tspan>      --all-targets     Fix all targets</tspan>
 </tspan>
     <tspan x="10px" y="514px">
+</tspan>
+    <tspan x="10px" y="532px"><tspan>Feature Selection:</tspan>
+</tspan>
+    <tspan x="10px" y="550px"><tspan>  -F, --features &lt;FEATURES&gt;  Space or comma separated list of features to activate</tspan>
+</tspan>
+    <tspan x="10px" y="568px"><tspan>      --all-features         Activate all available features</tspan>
+</tspan>
+    <tspan x="10px" y="586px"><tspan>      --no-default-features  Do not activate the `default` feature</tspan>
+</tspan>
+    <tspan x="10px" y="604px">
 </tspan>
   </text>
 

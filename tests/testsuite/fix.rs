@@ -148,7 +148,7 @@ fn fix_broken_if_requested() {
 
   tip: a similar argument exists: '--bench'
 
-Usage: cargo fixit --allow-no-vcs <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|-Z <FLAG>>
+Usage: cargo fixit --allow-no-vcs <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>>
 
 For more information, try '--help'.
 
@@ -802,13 +802,8 @@ fn fix_features() {
         .run();
     p.cargo_("check").run();
     p.cargo_("fix --features bar --allow-no-vcs")
-        .with_status(2)
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--features' found
-
-Usage: cargo fixit [OPTIONS]
-
-For more information, try '--help'.
+[FIXED] src/lib.rs (1 fix)
 
 "#]])
         .run();
@@ -877,7 +872,7 @@ fn warns_about_dirty_working_directory() {
 
   tip: a similar argument exists: '--all'
 
-Usage: cargo fixit <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|-Z <FLAG>>
+Usage: cargo fixit <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>>
 
 For more information, try '--help'.
 
@@ -906,7 +901,7 @@ fn warns_about_staged_working_directory() {
 
   tip: a similar argument exists: '--all-targets'
 
-Usage: cargo fixit <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|-Z <FLAG>>
+Usage: cargo fixit <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>>
 
 For more information, try '--help'.
 
@@ -935,7 +930,7 @@ fn errors_about_untracked_files() {
 
   tip: a similar argument exists: '--all'
 
-Usage: cargo fixit <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|-Z <FLAG>>
+Usage: cargo fixit <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>>
 
 For more information, try '--help'.
 
@@ -1654,7 +1649,7 @@ fn fix_to_broken_code() {
 
   tip: a similar argument exists: '--bench'
 
-Usage: cargo fixit --allow-no-vcs <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|-Z <FLAG>>
+Usage: cargo fixit --allow-no-vcs <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>>
 
 For more information, try '--help'.
 
@@ -2636,7 +2631,7 @@ fn fix_in_rust_src() {
 
   tip: a similar argument exists: '--bench'
 
-Usage: cargo fixit --allow-no-vcs <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|-Z <FLAG>>
+Usage: cargo fixit --allow-no-vcs <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>>
 
 For more information, try '--help'.
 
@@ -3182,7 +3177,7 @@ For more information, try '--help'.
 
 [ERROR] unexpected argument '--edition' found
   tip: a similar argument exists: '--version'
-Usage: cargo fixit --version <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|-Z <FLAG>>
+Usage: cargo fixit --version <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>>
 
 "#]]
             .unordered(),

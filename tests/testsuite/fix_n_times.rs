@@ -446,7 +446,7 @@ fn broken_code_no_suggestions() {
 
   tip: a similar argument exists: '--bench'
 
-Usage: cargo fixit --allow-no-vcs <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|-Z <FLAG>>
+Usage: cargo fixit --allow-no-vcs <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>>
 
 For more information, try '--help'.
 
@@ -469,7 +469,7 @@ fn broken_code_one_suggestion() {
 
   tip: a similar argument exists: '--bench'
 
-Usage: cargo fixit --allow-no-vcs <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|-Z <FLAG>>
+Usage: cargo fixit --allow-no-vcs <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>>
 
 For more information, try '--help'.
 
