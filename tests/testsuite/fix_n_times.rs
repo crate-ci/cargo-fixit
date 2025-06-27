@@ -324,7 +324,7 @@ fn fix_no_suggestions() {
 fn fix_one_suggestion() {
     // One suggested fix, with a successful verification, no output.
     expect_fix_runs_rustc_n_times(
-        &[Step::OneFix, Step::SuccessNoOutput],
+        &[Step::OneFix, Step::SuccessNoOutput, Step::SuccessNoOutput],
         |_execs| {},
         str![[r#"
 [FIXED] src/lib.rs (1 fix)
@@ -339,7 +339,7 @@ fn fix_one_suggestion() {
 fn fix_one_overlapping() {
     // Two suggested fixes, where one fails, then the next step returns no suggestions.
     expect_fix_runs_rustc_n_times(
-        &[Step::TwoFixOverlapping, Step::SuccessNoOutput],
+        &[Step::TwoFixOverlapping, Step::SuccessNoOutput, Step::SuccessNoOutput],
         |_execs| {},
         str![[r#"
 [FIXED] src/lib.rs (1 fix)
@@ -366,7 +366,9 @@ fn fix_overlapping_max() {
         str![[r#"
 [FIXED] src/lib.rs (4 fixes)
 rustc fix shim comment 5
+
 rustc fix shim comment 6
+
 
 "#]],
         "// fix-count 5",
@@ -379,11 +381,11 @@ fn fix_verification_failed() {
     // One suggested fix, with an error in the verification step.
     // This should cause `cargo fix` to back out the changes.
     expect_fix_runs_rustc_n_times(
-        &[Step::OneFix, Step::Error],
+        &[Step::OneFix, Step::Error, Step::SuccessNoOutput],
         |_execs| {},
         str![[r#"
 [FIXED] src/lib.rs (1 fix)
-rustc fix shim error count=2
+
 "#]],
         "// fix-count 1",
         0,
@@ -396,13 +398,13 @@ fn fix_verification_failed_clippy() {
     // the error message has the customization for the clippy URL and
     // subcommand.
     expect_fix_runs_rustc_n_times(
-        &[Step::OneFix, Step::Error],
+        &[Step::OneFix, Step::Error, Step::SuccessNoOutput],
         |execs| {
             execs.env("RUSTC_WORKSPACE_WRAPPER", wrapped_clippy_driver());
         },
         str![[r#"
 [FIXED] src/lib.rs (1 fix)
-rustc fix shim error count=2
+
 "#]],
         "// fix-count 1",
         0,
@@ -415,7 +417,11 @@ fn warnings() {
     expect_fix_runs_rustc_n_times(
         &[Step::Warning],
         |_execs| {},
-        str!["rustc fix shim warning count=1"],
+        str![[r#"
+rustc fix shim warning count=1
+
+
+"#]],
         "// fix-count 0",
         0,
     );
@@ -427,7 +433,11 @@ fn starts_with_error() {
     expect_fix_runs_rustc_n_times(
         &[Step::Error],
         |_execs| {},
-        str!["rustc fix shim error count=1"],
+        str![[r#"
+rustc fix shim error count=1
+
+
+"#]],
         "// fix-count 0",
         0,
     );

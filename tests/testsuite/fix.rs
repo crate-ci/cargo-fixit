@@ -121,6 +121,7 @@ error[E0308]: mismatched types
 
 For more information about this error, try `rustc --explain E0308`.
 
+
 "#]])
         .run();
     assert!(p.read_file("src/lib.rs").contains("let x = 3;"));
@@ -1921,45 +1922,7 @@ fn fix_shared_cross_workspace() {
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(
             str![[r#"
-[ERROR] expected parameter name, found `,`
- --> bar/src/../../foo/src/shared.rs:1:28
-  |
-1 | pub fn fixme(_xx: Box<dyn>,,> &dyn Fn() -> ()>) {}
-  |                            ^ expected parameter name
-
-[ERROR] expected parameter name, found `>`
- --> bar/src/../../foo/src/shared.rs:1:29
-  |
-1 | pub fn fixme(_xx: Box<dyn>,,> &dyn Fn() -> ()>) {}
-  |                             ^ expected parameter name
-
-[ERROR] expected parameter name, found `,`
- --> foo/src/shared.rs:1:28
-  |
-1 | pub fn fixme(_xx: Box<dyn>,,> &dyn Fn() -> ()>) {}
-  |                            ^ expected parameter name
-
-[ERROR] expected parameter name, found `>`
- --> foo/src/shared.rs:1:29
-  |
-1 | pub fn fixme(_xx: Box<dyn>,,> &dyn Fn() -> ()>) {}
-  |                             ^ expected parameter name
-
-error[E0412]: cannot find type `dyn` in this scope
- --> bar/src/../../foo/src/shared.rs:1:23
-  |
-1 | pub fn fixme(_xx: Box<dyn>,,> &dyn Fn() -> ()>) {}
-  |                       ^^^ not found in this scope
-
-For more information about this error, try `rustc --explain E0412`.
-error[E0412]: cannot find type `dyn` in this scope
- --> foo/src/shared.rs:1:23
-  |
-1 | pub fn fixme(_xx: Box<dyn>,,> &dyn Fn() -> ()>) {}
-  |                       ^^^ not found in this scope
-
-[FIXED] bar/src/../../foo/src/shared.rs (4 fixes)
-[FIXED] foo/src/shared.rs (4 fixes)
+[FIXED] [..]foo/src/shared.rs (2 fixes)
 
 "#]]
             .unordered(),
@@ -1969,7 +1932,7 @@ error[E0412]: cannot find type `dyn` in this scope
 
     assert_e2e().eq(
         p.read_file("foo/src/shared.rs"),
-        str!["pub fn fixme(_xx: Box<dyn>,,> &dyn Fn() -> ()>) {}"],
+        str!["pub fn fixme(_x: Box<&dyn Fn() -> ()>) {}"],
     );
 }
 
@@ -2045,6 +2008,14 @@ fn abnormal_exit() {
         // "signal: 6, SIGABRT: process abort signal" on some platforms
         .with_stderr_data(str![[r#"
 [FIXED] src/lib.rs (1 fix)
+[WARNING] unused variable: `x`
+ --> src/lib.rs:3:25
+  |
+3 |                     let x = 1;
+  |                         ^ [HELP] if this is intentional, prefix it with an underscore: `_x`
+  |
+  = [NOTE] `#[warn(unused_variables)]` on by default
+
 
 "#]])
         .with_status(0)
