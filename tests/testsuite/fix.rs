@@ -146,7 +146,9 @@ fn fix_broken_if_requested() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--broken-code' found
 
-Usage: cargo fixit --allow-no-vcs
+  tip: a similar argument exists: '--bench'
+
+Usage: cargo fixit --allow-no-vcs <--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|-Z <FLAG>>
 
 For more information, try '--help'.
 
@@ -763,7 +765,6 @@ fn fixes_missing_ampersand() {
         // we'll fix one non-test thing, and then fix another one later in
         // test mode.
         .with_stderr_data(str!["..."].unordered())
-        .with_status(2)
         .run();
     p.cargo_("check").run();
     p.cargo_("test").run();
@@ -901,9 +902,9 @@ fn warns_about_staged_working_directory() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-staged' found
 
-  tip: a similar argument exists: '--allow-no-vcs'
+  tip: a similar argument exists: '--all-targets'
 
-Usage: cargo fixit --allow-no-vcs
+Usage: cargo fixit <--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|-Z <FLAG>>
 
 For more information, try '--help'.
 
@@ -1384,7 +1385,6 @@ fn shows_warnings_on_second_run_without_changes_on_multiple_targets() {
 "#]]
             .unordered(),
         )
-        .with_status(2)
         .run();
 
     p.cargo_("fix --allow-no-vcs --all-targets")
@@ -1399,7 +1399,6 @@ fn shows_warnings_on_second_run_without_changes_on_multiple_targets() {
 "#]]
             .unordered(),
         )
-        .with_status(2)
         .run();
 }
 
@@ -1649,7 +1648,9 @@ fn fix_to_broken_code() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--broken-code' found
 
-Usage: cargo fixit --allow-no-vcs
+  tip: a similar argument exists: '--bench'
+
+Usage: cargo fixit --allow-no-vcs <--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|-Z <FLAG>>
 
 For more information, try '--help'.
 
@@ -2629,7 +2630,9 @@ fn fix_in_rust_src() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--broken-code' found
 
-Usage: cargo fixit --allow-no-vcs <--lib|--bins|--bin <NAME>|-Z <FLAG>>
+  tip: a similar argument exists: '--bench'
+
+Usage: cargo fixit --allow-no-vcs <--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|-Z <FLAG>>
 
 For more information, try '--help'.
 
@@ -3173,9 +3176,9 @@ dep_df_false = { version = "0.1.0", default-features = false }
 
 
 For more information, try '--help'.
-  tip: a similar argument exists: '--allow-no-vcs'
-Usage: cargo fixit --allow-no-vcs
 
+  tip: a similar argument exists: '--all-targets'
+Usage: cargo fixit <--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|-Z <FLAG>>
 
 "#]]
             .unordered(),

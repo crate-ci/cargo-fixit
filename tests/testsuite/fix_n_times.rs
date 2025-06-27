@@ -444,7 +444,9 @@ fn broken_code_no_suggestions() {
         str![[r#"
 [ERROR] unexpected argument '--broken-code' found
 
-Usage: cargo fixit --allow-no-vcs <--lib|--bins|--bin <NAME>|-Z <FLAG>>
+  tip: a similar argument exists: '--bench'
+
+Usage: cargo fixit --allow-no-vcs <--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|-Z <FLAG>>
 
 For more information, try '--help'.
 
@@ -465,7 +467,9 @@ fn broken_code_one_suggestion() {
         str![[r#"
 [ERROR] unexpected argument '--broken-code' found
 
-Usage: cargo fixit --allow-no-vcs <--lib|--bins|--bin <NAME>|-Z <FLAG>>
+  tip: a similar argument exists: '--bench'
+
+Usage: cargo fixit --allow-no-vcs <--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|-Z <FLAG>>
 
 For more information, try '--help'.
 
