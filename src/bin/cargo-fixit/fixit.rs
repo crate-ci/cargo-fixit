@@ -20,6 +20,10 @@ pub(crate) struct FixitArgs {
     #[arg(long)]
     allow_no_vcs: bool,
 
+    /// Run `clippy` instead of `check`
+    #[arg(long)]
+    clippy: bool,
+
     #[command(flatten)]
     check_flags: CheckFlags,
 }
@@ -101,8 +105,9 @@ fn run_rustfix(
 
     let mut errors = IndexSet::new();
 
+    let cmd = if args.clippy { "clippy" } else { "check" };
     let mut command = std::process::Command::new(env!("CARGO"))
-        .args(["check", "--message-format", "json"])
+        .args([cmd, "--message-format", "json"])
         .args(args.check_flags.to_flags())
         .stderr(Stdio::piped())
         .stdout(Stdio::piped())
