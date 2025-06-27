@@ -148,7 +148,7 @@ fn fix_broken_if_requested() {
 
   tip: a similar argument exists: '--bench'
 
-Usage: cargo fixit --allow-no-vcs <--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|-Z <FLAG>>
+Usage: cargo fixit --allow-no-vcs <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|-Z <FLAG>>
 
 For more information, try '--help'.
 
@@ -875,7 +875,9 @@ fn warns_about_dirty_working_directory() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-dirty' found
 
-Usage: cargo fixit [OPTIONS]
+  tip: a similar argument exists: '--all'
+
+Usage: cargo fixit <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|-Z <FLAG>>
 
 For more information, try '--help'.
 
@@ -904,7 +906,7 @@ fn warns_about_staged_working_directory() {
 
   tip: a similar argument exists: '--all-targets'
 
-Usage: cargo fixit <--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|-Z <FLAG>>
+Usage: cargo fixit <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|-Z <FLAG>>
 
 For more information, try '--help'.
 
@@ -931,7 +933,9 @@ fn errors_about_untracked_files() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--allow-dirty' found
 
-Usage: cargo fixit [OPTIONS]
+  tip: a similar argument exists: '--all'
+
+Usage: cargo fixit <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|-Z <FLAG>>
 
 For more information, try '--help'.
 
@@ -1650,7 +1654,7 @@ fn fix_to_broken_code() {
 
   tip: a similar argument exists: '--bench'
 
-Usage: cargo fixit --allow-no-vcs <--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|-Z <FLAG>>
+Usage: cargo fixit --allow-no-vcs <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|-Z <FLAG>>
 
 For more information, try '--help'.
 
@@ -2632,7 +2636,7 @@ fn fix_in_rust_src() {
 
   tip: a similar argument exists: '--bench'
 
-Usage: cargo fixit --allow-no-vcs <--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|-Z <FLAG>>
+Usage: cargo fixit --allow-no-vcs <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|-Z <FLAG>>
 
 For more information, try '--help'.
 
@@ -3172,13 +3176,13 @@ dep_df_false = { version = "0.1.0", default-features = false }
     p.cargo_("fix --all --edition --allow-no-vcs")
         .with_stderr_data(
             str![[r#"
-[ERROR] unexpected argument '--all' found
 
 
 For more information, try '--help'.
 
-  tip: a similar argument exists: '--all-targets'
-Usage: cargo fixit <--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|-Z <FLAG>>
+[ERROR] unexpected argument '--edition' found
+  tip: a similar argument exists: '--version'
+Usage: cargo fixit --version <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|-Z <FLAG>>
 
 "#]]
             .unordered(),

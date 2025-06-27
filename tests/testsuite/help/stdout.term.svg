@@ -1,4 +1,4 @@
-<svg width="740px" height="416px" xmlns="http://www.w3.org/2000/svg">
+<svg width="740px" height="524px" xmlns="http://www.w3.org/2000/svg">
   <style>
     .fg { fill: #AAAAAA }
     .bg { background: #000000 }
@@ -36,29 +36,41 @@
 </tspan>
     <tspan x="10px" y="190px">
 </tspan>
-    <tspan x="10px" y="208px"><tspan>Target Selection:</tspan>
+    <tspan x="10px" y="208px"><tspan>Package Selection:</tspan>
 </tspan>
-    <tspan x="10px" y="226px"><tspan>      --lib             Fix only this package's library</tspan>
+    <tspan x="10px" y="226px"><tspan>      --package &lt;SPEC&gt;  Package(s) to fix</tspan>
 </tspan>
-    <tspan x="10px" y="244px"><tspan>      --bins            Fix all binaries</tspan>
+    <tspan x="10px" y="244px"><tspan>      --workspace       Fix all packages in the workspace</tspan>
 </tspan>
-    <tspan x="10px" y="262px"><tspan>      --bin &lt;NAME&gt;      Fix only the specified binary</tspan>
+    <tspan x="10px" y="262px"><tspan>      --exclude &lt;SPEC&gt;  Exclude packages from the fixes</tspan>
 </tspan>
-    <tspan x="10px" y="280px"><tspan>      --examples        Fix all examples</tspan>
+    <tspan x="10px" y="280px"><tspan>      --all             Alias for --workspace (deprecated)</tspan>
 </tspan>
-    <tspan x="10px" y="298px"><tspan>      --example &lt;NAME&gt;  Fix only the specified binary</tspan>
+    <tspan x="10px" y="298px">
 </tspan>
-    <tspan x="10px" y="316px"><tspan>      --tests           Fix all tests</tspan>
+    <tspan x="10px" y="316px"><tspan>Target Selection:</tspan>
 </tspan>
-    <tspan x="10px" y="334px"><tspan>      --test &lt;NAME&gt;     Fix only the specified test</tspan>
+    <tspan x="10px" y="334px"><tspan>      --lib             Fix only this package's library</tspan>
 </tspan>
-    <tspan x="10px" y="352px"><tspan>      --benches         Fix all benches</tspan>
+    <tspan x="10px" y="352px"><tspan>      --bins            Fix all binaries</tspan>
 </tspan>
-    <tspan x="10px" y="370px"><tspan>      --bench &lt;NAME&gt;    Fix only the specified bench</tspan>
+    <tspan x="10px" y="370px"><tspan>      --bin &lt;NAME&gt;      Fix only the specified binary</tspan>
 </tspan>
-    <tspan x="10px" y="388px"><tspan>      --all-targets     Fix all targets</tspan>
+    <tspan x="10px" y="388px"><tspan>      --examples        Fix all examples</tspan>
 </tspan>
-    <tspan x="10px" y="406px">
+    <tspan x="10px" y="406px"><tspan>      --example &lt;NAME&gt;  Fix only the specified binary</tspan>
+</tspan>
+    <tspan x="10px" y="424px"><tspan>      --tests           Fix all tests</tspan>
+</tspan>
+    <tspan x="10px" y="442px"><tspan>      --test &lt;NAME&gt;     Fix only the specified test</tspan>
+</tspan>
+    <tspan x="10px" y="460px"><tspan>      --benches         Fix all benches</tspan>
+</tspan>
+    <tspan x="10px" y="478px"><tspan>      --bench &lt;NAME&gt;    Fix only the specified bench</tspan>
+</tspan>
+    <tspan x="10px" y="496px"><tspan>      --all-targets     Fix all targets</tspan>
+</tspan>
+    <tspan x="10px" y="514px">
 </tspan>
   </text>
 

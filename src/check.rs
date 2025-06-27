@@ -2,6 +2,22 @@ use clap::Parser;
 
 #[derive(Debug, Parser)]
 pub struct CheckFlags {
+    /// Package(s) to fix
+    #[arg(long, value_name = "SPEC", help_heading = "Package Selection")]
+    package: Vec<String>,
+
+    /// Fix all packages in the workspace
+    #[arg(long, help_heading = "Package Selection")]
+    workspace: bool,
+
+    /// Exclude packages from the fixes
+    #[arg(long, value_name = "SPEC", help_heading = "Package Selection")]
+    exclude: Vec<String>,
+
+    /// Alias for --workspace (deprecated)
+    #[arg(long, help_heading = "Package Selection")]
+    all: bool,
+
     /// Fix only this package's library
     #[arg(long, help_heading = "Target Selection")]
     lib: bool,
@@ -50,6 +66,21 @@ pub struct CheckFlags {
 impl CheckFlags {
     pub fn to_flags(&self) -> Vec<String> {
         let mut out = Vec::new();
+
+        for spec in self.package.clone() {
+            out.push("--package".to_owned());
+            out.push(spec);
+        }
+        if self.workspace {
+            out.push("--workspace".to_owned());
+        }
+        for spec in self.exclude.clone() {
+            out.push("--exclude".to_owned());
+            out.push(spec);
+        }
+        if self.all {
+            out.push("--all".to_owned());
+        }
 
         if self.lib {
             out.push("--lib".to_owned());
