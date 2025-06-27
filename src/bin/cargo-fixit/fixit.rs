@@ -6,7 +6,7 @@ use std::{
     process::Stdio,
 };
 
-use cargo_fixit::{shell, CargoResult, CheckFlags, CheckMessage};
+use cargo_fixit::{shell, CargoResult, CheckFlags, CheckMessage, Target};
 use cargo_util::paths;
 use clap::Parser;
 use indexmap::{IndexMap, IndexSet};
@@ -52,20 +52,19 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
 
     let mut last_errors;
 
-    let mut current_package_id = None;
+    let mut current_target = None;
     let mut seen = HashSet::new();
 
     loop {
-        let (errors, made_changes) =
-            run_rustfix(&args, &mut files, &mut current_package_id, &seen)?;
+        let (errors, made_changes) = run_rustfix(&args, &mut files, &mut current_target, &seen)?;
 
         last_errors = errors;
         iteration += 1;
 
         if !made_changes || iteration >= max_iterations {
-            if let Some(pkg) = current_package_id {
+            if let Some(pkg) = current_target {
                 seen.insert(pkg);
-                current_package_id = None;
+                current_target = None;
                 iteration = 0;
             } else {
                 break;
@@ -86,8 +85,8 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
 fn run_rustfix(
     args: &FixitArgs,
     files: &mut IndexMap<String, File>,
-    current_package_id: &mut Option<String>,
-    seen: &HashSet<String>,
+    current_target: &mut Option<(Target, String)>,
+    seen: &HashSet<(Target, String)>,
 ) -> CargoResult<(IndexSet<String>, bool)> {
     let only = HashSet::new();
     let mut file_map = IndexMap::new();
@@ -106,6 +105,7 @@ fn run_rustfix(
 
     for line in buf.lines() {
         let Ok(CheckMessage {
+            target,
             message: diagnostic,
             package_id,
         }) = serde_json::from_str(&line?)
@@ -158,7 +158,9 @@ fn run_rustfix(
             }
         }
 
-        if seen.contains(&package_id) {
+        let target = (target.clone(), package_id.clone());
+
+        if seen.contains(&target) {
             trace!(
                 "rejecting package id `{}` already seen: {:?}",
                 package_id,
@@ -170,9 +172,9 @@ fn run_rustfix(
             continue;
         }
 
-        let current_package_id = current_package_id.get_or_insert(package_id.clone());
+        let current_target = current_target.get_or_insert(target.clone());
 
-        if current_package_id == &package_id {
+        if current_target == &target {
             file_map
                 .entry(file_name)
                 .or_insert_with(IndexSet::new)
