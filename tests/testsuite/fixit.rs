@@ -143,3 +143,23 @@ fn dependency_order() {
 "#]])
         .run();
 }
+
+#[cargo_test]
+fn build_unit_order() {
+    let p = project()
+        .file("Cargo.toml", &basic_manifest("foo", "0.1.0"))
+        .file("build.rs", "fn main(){ let mut a = 1; let _ = a; }")
+        .file("src/lib.rs", "fn _a(){ let mut a = 1; let _ = a; }")
+        .file("src/main.rs", "fn main(){ let mut a = 1; let _ = a; }")
+        .build();
+
+    p.cargo_("fixit --allow-no-vcs")
+        .with_status(0)
+        .with_stderr_data(str![[r#"
+[FIXED] build.rs (1 fix)
+[FIXED] src/lib.rs (1 fix)
+[FIXED] src/main.rs (1 fix)
+
+"#]])
+        .run();
+}
