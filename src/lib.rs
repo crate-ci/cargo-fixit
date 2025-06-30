@@ -1,6 +1,6 @@
-mod check;
 mod errors;
+mod flags;
 pub mod shell;
 
-pub use check::CheckFlags;
 pub use errors::*;
+pub use flags::CheckFlags;
