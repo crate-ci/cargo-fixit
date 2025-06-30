@@ -1,5 +1,5 @@
 //! Tests for the `cargo fix` command.
-//! <https://github.com/rust-lang/cargo/blob/f1bf94d3b2a779d14e2ad6dff43f8d8017583b0d/tests/testsuite/fix.rs>
+//! <https://github.com/rust-lang/cargo/blob/930b4f62cfcd1f0eabdb30a56d91bf6844b739bf/tests/testsuite/fix.rs>
 
 use std::env;
 use std::path::{Path, PathBuf};
@@ -2619,7 +2619,8 @@ fn fix_only_once_for_duplicates() {
             r#"
 macro_rules! foo {
     () => {
-        &1;
+        let x = Box::new(1);
+        std::mem::forget(&x);
     };
 }
 
@@ -2646,7 +2647,8 @@ fn main() {
 
 macro_rules! foo {
     () => {
-        let _ = &1;
+        let x = Box::new(1);
+        let _ = &x;
     };
 }
 
