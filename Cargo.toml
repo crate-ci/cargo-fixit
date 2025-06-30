@@ -127,7 +127,7 @@ default = []
 anyhow = "1.0.96"
 clap = { version = "4.5.31", features = ["derive"] }
 clap-cargo = "0.15.2"
-tracing = { version = "0.1.41", default-features = false, features = ["std"] }
+tracing = { version = "0.1.41", default-features = false, features = ["std", "attributes"] }
 tracing-chrome = "0.7.2"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 rustfix = "0.9.0"
@@ -136,6 +136,7 @@ serde_json = "1.0.140"
 cargo-util = "0.2.20"
 indexmap = "2.9.0"
 anstream = "0.6.19"
+log = "0.4.27"
 
 [dev-dependencies]
 automod = "1.0.14"

@@ -38,6 +38,7 @@ struct File {
     fixes: u32,
 }
 
+#[tracing::instrument(skip_all)]
 fn exec(args: FixitArgs) -> CargoResult<()> {
     if !args.allow_no_vcs {
         shell::warn("support for VCS has not been implemented")?;
@@ -56,7 +57,11 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
     let mut seen = HashSet::new();
 
     loop {
+        trace!("iteration={iteration}");
+        trace!("current_target={current_target:?}");
         let (errors, made_changes) = run_rustfix(&args, &mut files, &mut current_target, &seen)?;
+        trace!("made_changes={made_changes:?}");
+        trace!("current_target={current_target:?}");
 
         last_errors = errors;
         iteration += 1;
@@ -82,6 +87,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
     Ok(())
 }
 
+#[tracing::instrument(skip_all)]
 fn run_rustfix(
     args: &FixitArgs,
     files: &mut IndexMap<String, File>,

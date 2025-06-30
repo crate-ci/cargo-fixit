@@ -1,14 +1,14 @@
 use rustfix::diagnostics::Diagnostic;
 use serde::Deserialize;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct CheckMessage {
     pub target: Target,
     pub message: Diagnostic,
     pub package_id: String,
 }
 
-#[derive(Deserialize, Hash, PartialEq, Clone, Eq)]
+#[derive(Deserialize, Hash, PartialEq, Clone, Eq, Debug)]
 pub struct Target {
     kind: Vec<Kind>,
     crate_types: Vec<CrateType>,
@@ -20,7 +20,7 @@ pub struct Target {
     test: bool,
 }
 
-#[derive(Deserialize, Hash, PartialEq, Clone, Eq)]
+#[derive(Deserialize, Hash, PartialEq, Clone, Eq, Debug)]
 #[serde(rename_all(deserialize = "kebab-case"))]
 pub enum Kind {
     Bin,
@@ -38,7 +38,7 @@ pub enum Kind {
     Other(String),
 }
 
-#[derive(Deserialize, Hash, PartialEq, Clone, Eq)]
+#[derive(Deserialize, Hash, PartialEq, Clone, Eq, Debug)]
 #[serde(rename_all(deserialize = "kebab-case"))]
 pub enum CrateType {
     Bin,
