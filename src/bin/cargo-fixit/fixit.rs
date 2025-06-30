@@ -6,12 +6,11 @@ use std::{
     process::Stdio,
 };
 
-use cargo_fixit::{shell, CargoResult, CheckFlags};
+use cargo_fixit::{shell, CargoResult, CheckFlags, CheckMessage};
 use cargo_util::paths;
 use clap::Parser;
 use indexmap::{IndexMap, IndexSet};
-use rustfix::{collect_suggestions, diagnostics::Diagnostic, CodeFix};
-use serde::Deserialize;
+use rustfix::{collect_suggestions, CodeFix};
 use tracing::{trace, warn};
 
 #[derive(Debug, Parser)]
@@ -32,12 +31,6 @@ impl FixitArgs {
     pub(crate) fn exec(self) -> CargoResult<()> {
         exec(self)
     }
-}
-
-#[derive(Deserialize)]
-struct CheckMessage {
-    message: Diagnostic,
-    package_id: String,
 }
 
 #[derive(Debug, Default)]
