@@ -26,9 +26,9 @@
 </tspan>
     <tspan x="10px" y="100px"><tspan>Options:</tspan>
 </tspan>
-    <tspan x="10px" y="118px"><tspan>      --allow-no-vcs  Fix code even if a VCS was not detected</tspan>
+    <tspan x="10px" y="118px"><tspan>      --clippy        Run `clippy` instead of `check`</tspan>
 </tspan>
-    <tspan x="10px" y="136px"><tspan>      --clippy        Run `clippy` instead of `check`</tspan>
+    <tspan x="10px" y="136px"><tspan>      --allow-no-vcs  Fix code even if a VCS was not detected</tspan>
 </tspan>
     <tspan x="10px" y="154px"><tspan>  -Z &lt;FLAG&gt;           Unstable (nightly-only) flags</tspan>
 </tspan>

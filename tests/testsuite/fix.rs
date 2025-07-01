@@ -149,7 +149,7 @@ fn fix_broken_if_requested() {
 
   tip: a similar argument exists: '--bench'
 
-Usage: cargo fixit --allow-no-vcs <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>>
+Usage: cargo fixit <--allow-no-vcs> <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>>
 
 For more information, try '--help'.
 
@@ -1195,7 +1195,7 @@ fn fix_overlapping() {
 
   tip: a similar argument exists: '--version'
 
-Usage: cargo fixit --allow-no-vcs --version
+Usage: cargo fixit --version <--allow-no-vcs>
 
 For more information, try '--help'.
 
@@ -1482,7 +1482,7 @@ fn does_not_crash_with_rustc_wrapper() {
 
   tip: a similar argument exists: '--version'
 
-Usage: cargo fixit --allow-no-vcs --version
+Usage: cargo fixit --version <--allow-no-vcs>
 
 For more information, try '--help'.
 
@@ -1512,7 +1512,7 @@ fn uses_workspace_wrapper_and_primary_wrapper_override() {
 
   tip: a similar argument exists: '--version'
 
-Usage: cargo fixit --allow-no-vcs --version
+Usage: cargo fixit --version <--allow-no-vcs>
 
 For more information, try '--help'.
 
@@ -1564,7 +1564,7 @@ fn only_warn_for_relevant_crates() {
 
   tip: a similar argument exists: '--version'
 
-Usage: cargo fixit --allow-no-vcs --version
+Usage: cargo fixit --version <--allow-no-vcs>
 
 For more information, try '--help'.
 
@@ -1650,7 +1650,7 @@ fn fix_to_broken_code() {
 
   tip: a similar argument exists: '--bench'
 
-Usage: cargo fixit --allow-no-vcs <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>>
+Usage: cargo fixit <--allow-no-vcs> <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>>
 
 For more information, try '--help'.
 
@@ -1750,7 +1750,7 @@ fn fix_color_message() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--color' found
 
-Usage: cargo fixit --allow-no-vcs
+Usage: cargo fixit <--allow-no-vcs>
 
 For more information, try '--help'.
 
@@ -2602,7 +2602,7 @@ fn fix_in_rust_src() {
 
   tip: a similar argument exists: '--bench'
 
-Usage: cargo fixit --allow-no-vcs <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>>
+Usage: cargo fixit <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>> <--allow-no-vcs>
 
 For more information, try '--help'.
 
