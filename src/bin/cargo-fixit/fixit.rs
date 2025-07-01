@@ -6,7 +6,7 @@ use std::{
     process::Stdio,
 };
 
-use cargo_fixit::{shell, CargoResult, CheckFlags, CheckMessage, Target};
+use cargo_fixit::{shell, CargoResult, CheckFlags, CheckMessage, Target, VcsOpts};
 use cargo_util::paths;
 use clap::Parser;
 use indexmap::{IndexMap, IndexSet};
@@ -15,13 +15,12 @@ use tracing::{trace, warn};
 
 #[derive(Debug, Parser)]
 pub(crate) struct FixitArgs {
-    /// Fix code even if a VCS was not detected
-    #[arg(long)]
-    allow_no_vcs: bool,
-
     /// Run `clippy` instead of `check`
     #[arg(long)]
     clippy: bool,
+
+    #[command(flatten)]
+    vcs_opts: VcsOpts,
 
     #[command(flatten)]
     check_flags: CheckFlags,
@@ -40,9 +39,8 @@ struct File {
 
 #[tracing::instrument(skip_all)]
 fn exec(args: FixitArgs) -> CargoResult<()> {
-    if !args.allow_no_vcs {
-        shell::warn("support for VCS has not been implemented")?;
-    }
+    args.vcs_opts.valid_vcs()?;
+
     let mut files = IndexMap::new();
 
     let max_iterations: usize = env::var("CARGO_FIX_MAX_RETRIES")

@@ -18,10 +18,9 @@ fn basic() {
         )
         .build();
 
-    p.cargo_("fixit")
+    p.cargo_("fixit --allow-no-vcs")
         .with_status(0)
         .with_stderr_data(str![[r#"
-[WARNING] support for VCS has not been implemented
 [FIXED] src/lib.rs (1 fix)
 
 "#]])
@@ -55,10 +54,9 @@ fn fixable_and_unfixable() {
         )
         .build();
 
-    p.cargo_("fixit")
+    p.cargo_("fixit --allow-no-vcs")
         .with_status(0)
         .with_stderr_data(str![[r#"
-[WARNING] support for VCS has not been implemented
 [FIXED] src/lib.rs (1 fix)
 [WARNING] unused variable: `c`
  --> src/lib.rs:6:21
