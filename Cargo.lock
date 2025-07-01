@@ -175,15 +175,15 @@ dependencies = [
 
 [[package]]
 name = "cargo-test-macro"
-version = "0.4.2"
+version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41d5f58450c2ff589e2b50b2c2ac13b9a9d3b92bbec0b888ae7e7dbef715f89a"
+checksum = "39a643a9f943fcf24470056bf031917f59d5a690846d08d8da06513427bd6739"
 
 [[package]]
 name = "cargo-test-support"
-version = "0.7.3"
+version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f8f0ef781cd9daa81880986b8b5e667c00ffe1943740f15ddf04809d3723784"
+checksum = "bf5198c9b6486dfee24157115384db428e64adbb3cdd6cb37f3f6576098777b0"
 dependencies = [
  "anstream",
  "anstyle",
@@ -603,12 +603,12 @@ dependencies = [
 
 [[package]]
 name = "flate2"
-version = "1.1.0"
+version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11faaf5a5236997af9848be0bef4db95824b1d534ebc64d0f0c6cf3e67bd38dc"
+checksum = "4a3d7db9596fecd151c5f638c0ee5d5bd487b6e0ea232e5dc96d5250f6f94b1d"
 dependencies = [
  "crc32fast",
- "libz-sys",
+ "libz-rs-sys",
  "miniz_oxide",
 ]
 
@@ -1003,6 +1003,15 @@ dependencies = [
  "openssl-sys",
  "pkg-config",
  "vcpkg",
+]
+
+[[package]]
+name = "libz-rs-sys"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "172a788537a2221661b480fee8dc5f96c580eb34fa88764d3205dc356c7e4221"
+dependencies = [
+ "zlib-rs",
 ]
 
 [[package]]
@@ -2233,3 +2242,9 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[package]]
+name = "zlib-rs"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "626bd9fa9734751fc50d6060752170984d7053f5a39061f524cda68023d4db8a"
