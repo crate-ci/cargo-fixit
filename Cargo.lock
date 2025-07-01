@@ -161,6 +161,7 @@ dependencies = [
  "cargo-util",
  "clap",
  "clap-cargo",
+ "git2",
  "indexmap",
  "log",
  "rustfix",

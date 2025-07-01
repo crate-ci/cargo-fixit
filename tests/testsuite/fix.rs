@@ -149,7 +149,7 @@ fn fix_broken_if_requested() {
 
   tip: a similar argument exists: '--bench'
 
-Usage: cargo fixit <--allow-no-vcs> <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>>
+Usage: cargo fixit <--allow-no-vcs|--allow-dirty|--allow-staged> <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>>
 
 For more information, try '--help'.
 
@@ -841,9 +841,9 @@ fn warns_if_no_vcs_detected() {
     let p = project().file("src/lib.rs", "pub fn foo() {}").build();
 
     p.cargo_("fix")
-        .with_status(0)
+        .with_status(1)
         .with_stderr_data(str![[r#"
-[WARNING] support for VCS has not been implemented
+Error: no VCS found for this package and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-no-vcs`
 
 "#]])
         .run();
@@ -860,24 +860,19 @@ fn warns_about_dirty_working_directory() {
     p.change_file("src/lib.rs", "");
 
     p.cargo_("fix")
-        .with_status(0)
+        .with_status(1)
         .with_stderr_data(str![[r#"
-[WARNING] support for VCS has not been implemented
+Error: the working directory of this package has uncommitted changes, and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-dirty`, or commit the changes to these files:
+
+  * src/lib.rs (dirty)
+
+
 
 "#]])
         .run();
     p.cargo_("fix --allow-dirty")
-        .with_status(2)
-        .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--allow-dirty' found
-
-  tip: a similar argument exists: '--all'
-
-Usage: cargo fixit <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>>
-
-For more information, try '--help'.
-
-"#]])
+        .with_status(0)
+        .with_stderr_data(str![""])
         .run();
 }
 
@@ -889,24 +884,19 @@ fn warns_about_staged_working_directory() {
     git::add(&repo);
 
     p.cargo_("fix")
-        .with_status(0)
+        .with_status(1)
         .with_stderr_data(str![[r#"
-[WARNING] support for VCS has not been implemented
+Error: the working directory of this package has uncommitted changes, and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-dirty`, or commit the changes to these files:
+
+  * src/lib.rs (staged)
+
+
 
 "#]])
         .run();
     p.cargo_("fix --allow-staged")
-        .with_status(2)
-        .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--allow-staged' found
-
-  tip: a similar argument exists: '--all-targets'
-
-Usage: cargo fixit <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>>
-
-For more information, try '--help'.
-
-"#]])
+        .with_status(0)
+        .with_stderr_data(str![""])
         .run();
 }
 
@@ -918,24 +908,20 @@ fn errors_about_untracked_files() {
     let _ = init(&p.root());
 
     p.cargo_("fix")
-        .with_status(0)
+        .with_status(1)
         .with_stderr_data(str![[r#"
-[WARNING] support for VCS has not been implemented
+Error: the working directory of this package has uncommitted changes, and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-dirty`, or commit the changes to these files:
+
+  * Cargo.toml (dirty)
+  * src/ (dirty)
+
+
 
 "#]])
         .run();
     p.cargo_("fix --allow-dirty")
-        .with_status(2)
-        .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--allow-dirty' found
-
-  tip: a similar argument exists: '--all'
-
-Usage: cargo fixit <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>>
-
-For more information, try '--help'.
-
-"#]])
+        .with_status(0)
+        .with_stderr_data(str![""])
         .run();
 }
 
@@ -944,10 +930,7 @@ fn does_not_warn_about_clean_working_directory() {
     let p = git::new("foo", |p| p.file("src/lib.rs", "pub fn foo() {}"));
     p.cargo_("fix")
         .with_status(0)
-        .with_stderr_data(str![[r#"
-[WARNING] support for VCS has not been implemented
-
-"#]])
+        .with_stderr_data(str![""])
         .run();
 }
 
@@ -962,10 +945,7 @@ fn does_not_warn_about_dirty_ignored_files() {
 
     p.cargo_("fix")
         .with_status(0)
-        .with_stderr_data(str![[r#"
-[WARNING] support for VCS has not been implemented
-
-"#]])
+        .with_stderr_data(str![""])
         .run();
 }
 
@@ -1195,7 +1175,7 @@ fn fix_overlapping() {
 
   tip: a similar argument exists: '--version'
 
-Usage: cargo fixit --version <--allow-no-vcs>
+Usage: cargo fixit --version <--allow-no-vcs|--allow-dirty|--allow-staged>
 
 For more information, try '--help'.
 
@@ -1482,7 +1462,7 @@ fn does_not_crash_with_rustc_wrapper() {
 
   tip: a similar argument exists: '--version'
 
-Usage: cargo fixit --version <--allow-no-vcs>
+Usage: cargo fixit --version <--allow-no-vcs|--allow-dirty|--allow-staged>
 
 For more information, try '--help'.
 
@@ -1512,7 +1492,7 @@ fn uses_workspace_wrapper_and_primary_wrapper_override() {
 
   tip: a similar argument exists: '--version'
 
-Usage: cargo fixit --version <--allow-no-vcs>
+Usage: cargo fixit --version <--allow-no-vcs|--allow-dirty|--allow-staged>
 
 For more information, try '--help'.
 
@@ -1564,7 +1544,7 @@ fn only_warn_for_relevant_crates() {
 
   tip: a similar argument exists: '--version'
 
-Usage: cargo fixit --version <--allow-no-vcs>
+Usage: cargo fixit --version <--allow-no-vcs|--allow-dirty|--allow-staged>
 
 For more information, try '--help'.
 
@@ -1650,7 +1630,7 @@ fn fix_to_broken_code() {
 
   tip: a similar argument exists: '--bench'
 
-Usage: cargo fixit <--allow-no-vcs> <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>>
+Usage: cargo fixit <--allow-no-vcs|--allow-dirty|--allow-staged> <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>>
 
 For more information, try '--help'.
 
@@ -1708,10 +1688,7 @@ fn fix_in_existing_repo_weird_ignore() {
 
     p.cargo_("fix")
         .with_status(0)
-        .with_stderr_data(str![[r#"
-[WARNING] support for VCS has not been implemented
-
-"#]])
+        .with_stderr_data(str![""])
         .run();
     // This is questionable about whether it is the right behavior. It should
     // probably be checking if any source file for the current project is
@@ -1719,18 +1696,15 @@ fn fix_in_existing_repo_weird_ignore() {
     p.cargo_("fix")
         .cwd("inner")
         .with_stderr_data(str![[r#"
-[WARNING] support for VCS has not been implemented
+Error: no VCS found for this package and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-no-vcs`
 
 "#]])
-        .with_status(0)
+        .with_status(1)
         .run();
     p.cargo_("fix")
         .cwd("src")
         .with_status(0)
-        .with_stderr_data(str![[r#"
-[WARNING] support for VCS has not been implemented
-
-"#]])
+        .with_stderr_data(str![""])
         .run();
 }
 
@@ -1750,7 +1724,7 @@ fn fix_color_message() {
         .with_stderr_data(str![[r#"
 [ERROR] unexpected argument '--color' found
 
-Usage: cargo fixit <--allow-no-vcs>
+Usage: cargo fixit <--allow-no-vcs|--allow-dirty|--allow-staged>
 
 For more information, try '--help'.
 
@@ -2602,7 +2576,7 @@ fn fix_in_rust_src() {
 
   tip: a similar argument exists: '--bench'
 
-Usage: cargo fixit <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>> <--allow-no-vcs>
+Usage: cargo fixit <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>> <--allow-no-vcs|--allow-dirty|--allow-staged>
 
 For more information, try '--help'.
 
@@ -3279,10 +3253,10 @@ fn fix_edition_future() {
     p.cargo_("fix -Zfix-edition=end=2024,future")
         .masquerade_as_nightly_cargo(&["fix-edition"])
         .with_stderr_data(str![[r#"
-[WARNING] support for VCS has not been implemented
+Error: no VCS found for this package and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-no-vcs`
 
 "#]])
-        .with_status(0)
+        .with_status(1)
         .run();
     assert_e2e().eq(
         p.read_file("Cargo.toml"),

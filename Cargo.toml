@@ -138,6 +138,7 @@ cargo-util = "0.2.20"
 indexmap = "2.9.0"
 anstream = "0.6.19"
 log = "0.4.27"
+git2 = "0.20.2"
 
 [dev-dependencies]
 automod = "1.0.14"
