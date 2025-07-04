@@ -6,7 +6,9 @@ use std::{
     process::Stdio,
 };
 
-use cargo_fixit::{shell, CargoResult, CheckFlags, CheckMessage, Target, VcsOpts};
+use cargo_fixit::{
+    format_package_id, shell, CargoResult, CheckFlags, CheckMessage, Target, VcsOpts,
+};
 use cargo_util::paths;
 use clap::Parser;
 use indexmap::{IndexMap, IndexSet};
@@ -66,6 +68,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
 
         if !made_changes || iteration >= max_iterations {
             if let Some(pkg) = current_target {
+                shell::status("Fixed", format_package_id(&pkg.1)?)?;
                 seen.insert(pkg);
                 current_target = None;
                 iteration = 0;
