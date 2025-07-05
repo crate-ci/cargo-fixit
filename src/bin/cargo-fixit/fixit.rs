@@ -6,7 +6,9 @@ use std::{
     process::Stdio,
 };
 
-use cargo_fixit::{shell, CargoResult, CheckFlags, CheckMessage, Target, VcsOpts};
+use cargo_fixit::{
+    format_package_id, shell, CargoResult, CheckFlags, CheckOutput, Message, Target, VcsOpts,
+};
 use cargo_util::paths;
 use clap::Parser;
 use indexmap::{IndexMap, IndexSet};
@@ -57,7 +59,8 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
     loop {
         trace!("iteration={iteration}");
         trace!("current_target={current_target:?}");
-        let (errors, made_changes) = run_rustfix(&args, &mut files, &mut current_target, &seen)?;
+        let (errors, made_changes) =
+            run_rustfix(&args, &mut files, &mut current_target, &mut seen)?;
         trace!("made_changes={made_changes:?}");
         trace!("current_target={current_target:?}");
 
@@ -66,6 +69,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
 
         if !made_changes || iteration >= max_iterations {
             if let Some(pkg) = current_target {
+                shell::status("Fixed", format_package_id(&pkg.1)?)?;
                 seen.insert(pkg);
                 current_target = None;
                 iteration = 0;
@@ -90,7 +94,7 @@ fn run_rustfix(
     args: &FixitArgs,
     files: &mut IndexMap<String, File>,
     current_target: &mut Option<(Target, String)>,
-    seen: &HashSet<(Target, String)>,
+    seen: &mut HashSet<(Target, String)>,
 ) -> CargoResult<(IndexSet<String>, bool)> {
     let only = HashSet::new();
     let mut file_map = IndexMap::new();
@@ -108,14 +112,26 @@ fn run_rustfix(
     let buf = BufReader::new(command.stdout.take().expect("could not capture output"));
 
     for line in buf.lines() {
-        let Ok(CheckMessage {
+        let Ok(message) = serde_json::from_str(&line?) else {
+            continue;
+        };
+
+        let Message {
             target,
             message: diagnostic,
             package_id,
-        }) = serde_json::from_str(&line?)
-        else {
-            continue;
+        } = match message {
+            CheckOutput::Message(m) => m,
+            CheckOutput::Artifact(a) => {
+                let target = (a.target, a.package_id);
+                if current_target.is_none() && !seen.contains(&target) && !a.fresh {
+                    shell::status("Checking", format_package_id(&target.1)?)?;
+                    seen.insert(target);
+                }
+                continue;
+            }
         };
+
         let filter = if env::var("__CARGO_FIX_YOLO").is_ok() {
             rustfix::Filter::Everything
         } else {

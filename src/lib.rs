@@ -6,11 +6,13 @@ mod check;
 mod errors;
 mod flags;
 pub mod shell;
+mod utils;
 mod vcs;
 
 pub use check::*;
 pub use errors::*;
 pub use flags::CheckFlags;
+pub use utils::*;
 pub use vcs::*;
 
 #[doc = include_str!("../README.md")]

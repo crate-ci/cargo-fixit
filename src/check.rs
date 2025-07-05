@@ -2,7 +2,22 @@ use rustfix::diagnostics::Diagnostic;
 use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]
-pub struct CheckMessage {
+#[serde(untagged)]
+pub enum CheckOutput {
+    Artifact(Artifact),
+    Message(Message),
+}
+
+#[derive(Deserialize, Debug)]
+#[allow(dead_code)]
+pub struct Artifact {
+    pub package_id: String,
+    pub target: Target,
+    pub fresh: bool,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Message {
     pub target: Target,
     pub message: Diagnostic,
     pub package_id: String,
