@@ -9,7 +9,7 @@ use std::{
 use cargo_util::paths;
 use clap::Parser;
 use indexmap::{IndexMap, IndexSet};
-use rustfix::{collect_suggestions, CodeFix};
+use rustfix::{collect_suggestions, CodeFix, Suggestion};
 use tracing::{trace, warn};
 
 use crate::{
@@ -64,7 +64,9 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
     loop {
         trace!("iteration={iteration}");
         trace!("current_target={current_target:?}");
-        let (errors, made_changes) = run_rustfix(&args, &mut files, &mut current_target, &seen)?;
+        let (mut errors, file_map) = collect_errors(&args, &mut current_target, &seen)?;
+
+        let made_changes = fix_errors(&mut files, file_map, &mut errors)?;
         trace!("made_changes={made_changes:?}");
         trace!("current_target={current_target:?}");
 
@@ -93,12 +95,15 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
 }
 
 #[tracing::instrument(skip_all)]
-fn run_rustfix(
+#[allow(clippy::type_complexity)]
+fn collect_errors(
     args: &FixitArgs,
-    files: &mut IndexMap<String, File>,
     current_target: &mut Option<(Target, String)>,
     seen: &HashSet<(Target, String)>,
-) -> CargoResult<(IndexSet<String>, bool)> {
+) -> CargoResult<(
+    IndexSet<String>,
+    IndexMap<String, IndexSet<(Suggestion, Option<String>)>>,
+)> {
     let only = HashSet::new();
     let mut file_map = IndexMap::new();
 
@@ -195,6 +200,15 @@ fn run_rustfix(
 
     let _exit_code = command.wait()?;
 
+    Ok((errors, file_map))
+}
+
+#[tracing::instrument(skip_all)]
+fn fix_errors(
+    files: &mut IndexMap<String, File>,
+    file_map: IndexMap<String, IndexSet<(Suggestion, Option<String>)>>,
+    errors: &mut IndexSet<String>,
+) -> CargoResult<bool> {
     let mut made_changes = false;
     for (file, suggestions) in file_map {
         let code = match paths::read(file.as_ref()) {
@@ -231,5 +245,5 @@ fn run_rustfix(
         }
     }
 
-    Ok((errors, made_changes))
+    Ok(made_changes)
 }
