@@ -14,7 +14,7 @@ use tracing::{trace, warn};
 
 use crate::{
     core::shell,
-    ops::check::{CheckMessage, Target},
+    ops::check::{BuildUnit, CheckMessage},
     util::{cli::CheckFlags, vcs::VcsOpts},
     CargoResult,
 };
@@ -98,8 +98,8 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
 #[allow(clippy::type_complexity)]
 fn collect_errors(
     args: &FixitArgs,
-    current_target: &mut Option<(Target, String)>,
-    seen: &HashSet<(Target, String)>,
+    current_target: &mut Option<BuildUnit>,
+    seen: &HashSet<BuildUnit>,
 ) -> CargoResult<(
     IndexSet<String>,
     IndexMap<String, IndexSet<(Suggestion, Option<String>)>>,
@@ -121,9 +121,8 @@ fn collect_errors(
 
     for line in buf.lines() {
         let Ok(CheckMessage {
-            target,
+            build_unit,
             message: diagnostic,
-            package_id,
         }) = serde_json::from_str(&line?)
         else {
             continue;
@@ -174,12 +173,10 @@ fn collect_errors(
             }
         }
 
-        let target = (target.clone(), package_id.clone());
-
-        if seen.contains(&target) {
+        if seen.contains(&build_unit) {
             trace!(
                 "rejecting package id `{}` already seen: {:?}",
-                package_id,
+                build_unit.package_id,
                 suggestion,
             );
             if let Some(rendered) = diagnostic.rendered {
@@ -188,9 +185,9 @@ fn collect_errors(
             continue;
         }
 
-        let current_target = current_target.get_or_insert(target.clone());
+        let current_target = current_target.get_or_insert(build_unit.clone());
 
-        if current_target == &target {
+        if current_target == &build_unit {
             file_map
                 .entry(file_name)
                 .or_insert_with(IndexSet::new)

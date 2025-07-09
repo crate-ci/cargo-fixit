@@ -3,9 +3,15 @@ use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]
 pub struct CheckMessage {
-    pub target: Target,
+    #[serde(flatten)]
+    pub build_unit: BuildUnit,
     pub message: Diagnostic,
+}
+
+#[derive(Deserialize, Hash, PartialEq, Clone, Eq, Debug)]
+pub struct BuildUnit {
     pub package_id: String,
+    pub target: Target,
 }
 
 #[derive(Deserialize, Hash, PartialEq, Clone, Eq, Debug)]
