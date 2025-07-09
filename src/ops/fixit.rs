@@ -1,7 +1,7 @@
 use std::{
     collections::HashSet,
     env,
-    io::{BufRead, BufReader},
+    io::{BufRead, BufReader, Cursor},
     path::Path,
     process::Stdio,
 };
@@ -64,7 +64,9 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
     loop {
         trace!("iteration={iteration}");
         trace!("current_target={current_target:?}");
-        let (mut errors, file_map) = collect_errors(&args, &mut current_target, &seen)?;
+        let (messages, _exit_code) = check(&args)?;
+
+        let (mut errors, file_map) = collect_errors(messages, &mut current_target, &seen)?;
 
         let made_changes = fix_errors(&mut files, file_map, &mut errors)?;
         trace!("made_changes={made_changes:?}");
@@ -94,10 +96,29 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
     Ok(())
 }
 
+fn check(args: &FixitArgs) -> CargoResult<(impl Iterator<Item = CheckMessage>, Option<i32>)> {
+    let cmd = if args.clippy { "clippy" } else { "check" };
+    let command = std::process::Command::new(env!("CARGO"))
+        .args([cmd, "--message-format", "json"])
+        .args(args.check_flags.to_flags())
+        .stderr(Stdio::piped())
+        .stdout(Stdio::piped())
+        .output()?;
+
+    let buf = BufReader::new(Cursor::new(command.stdout));
+
+    Ok((
+        buf.lines()
+            .map_while(|l| l.ok())
+            .filter_map(|l| serde_json::from_str(&l).ok()),
+        command.status.code(),
+    ))
+}
+
 #[tracing::instrument(skip_all)]
 #[allow(clippy::type_complexity)]
 fn collect_errors(
-    args: &FixitArgs,
+    messages: impl Iterator<Item = CheckMessage>,
     current_target: &mut Option<BuildUnit>,
     seen: &HashSet<BuildUnit>,
 ) -> CargoResult<(
@@ -109,24 +130,12 @@ fn collect_errors(
 
     let mut errors = IndexSet::new();
 
-    let cmd = if args.clippy { "clippy" } else { "check" };
-    let mut command = std::process::Command::new(env!("CARGO"))
-        .args([cmd, "--message-format", "json"])
-        .args(args.check_flags.to_flags())
-        .stderr(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()?;
-
-    let buf = BufReader::new(command.stdout.take().expect("could not capture output"));
-
-    for line in buf.lines() {
-        let Ok(CheckMessage {
+    for message in messages {
+        let CheckMessage {
             build_unit,
             message: diagnostic,
-        }) = serde_json::from_str(&line?)
-        else {
-            continue;
-        };
+        } = message;
+
         let filter = if env::var("__CARGO_FIX_YOLO").is_ok() {
             rustfix::Filter::Everything
         } else {
@@ -194,8 +203,6 @@ fn collect_errors(
                 .insert((suggestion, diagnostic.rendered));
         }
     }
-
-    let _exit_code = command.wait()?;
 
     Ok((errors, file_map))
 }
