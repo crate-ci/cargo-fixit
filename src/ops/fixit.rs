@@ -150,15 +150,13 @@ fn collect_errors(
             continue;
         };
 
-        let file_names = suggestion
+        let mut file_names = suggestion
             .solutions
             .iter()
             .flat_map(|s| s.replacements.iter())
             .map(|r| &r.snippet.file_name);
 
-        let file_name = if let Some(file_name) = file_names.clone().next() {
-            file_name.clone()
-        } else {
+        let Some(file_name) = file_names.next() else {
             trace!("rejecting as it has no solutions {:?}", suggestion);
             if let Some(rendered) = diagnostic.rendered {
                 errors.insert(rendered);
@@ -166,7 +164,7 @@ fn collect_errors(
             continue;
         };
 
-        if !file_names.clone().all(|f| f == &file_name) {
+        if !file_names.all(|f| f == file_name) {
             trace!("rejecting as it changes multiple files: {:?}", suggestion);
             if let Some(rendered) = diagnostic.rendered {
                 errors.insert(rendered);
@@ -198,7 +196,7 @@ fn collect_errors(
 
         if current_target == &build_unit {
             file_map
-                .entry(file_name)
+                .entry(file_name.to_owned())
                 .or_insert_with(IndexSet::new)
                 .insert((suggestion, diagnostic.rendered));
         }
