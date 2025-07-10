@@ -145,6 +145,14 @@ fn collect_errors(
             message: diagnostic,
         } = message;
 
+        if seen.contains(&build_unit) {
+            trace!("rejecting build unit `{:?}` already seen", build_unit);
+            if let Some(rendered) = diagnostic.rendered {
+                errors.insert(rendered);
+            }
+            continue;
+        }
+
         let filter = if env::var("__CARGO_FIX_YOLO").is_ok() {
             rustfix::Filter::Everything
         } else {
@@ -187,18 +195,6 @@ fn collect_errors(
             if file_path.starts_with(home) {
                 continue;
             }
-        }
-
-        if seen.contains(&build_unit) {
-            trace!(
-                "rejecting package id `{}` already seen: {:?}",
-                build_unit.package_id,
-                suggestion,
-            );
-            if let Some(rendered) = diagnostic.rendered {
-                errors.insert(rendered);
-            }
-            continue;
         }
 
         build_unit_map
