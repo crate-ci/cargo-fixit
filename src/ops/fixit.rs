@@ -66,9 +66,19 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
         trace!("current_target={current_target:?}");
         let (messages, _exit_code) = check(&args)?;
 
-        let (mut errors, file_map) = collect_errors(messages, &mut current_target, &seen)?;
+        let (mut errors, build_unit_map) = collect_errors(messages, &seen);
 
-        let made_changes = fix_errors(&mut files, file_map, &mut errors)?;
+        let mut made_changes = false;
+
+        for (build_unit, file_map) in build_unit_map {
+            if current_target.get_or_insert(build_unit.clone()) == &build_unit
+                && fix_errors(&mut files, file_map, &mut errors)?
+            {
+                made_changes = true;
+                break;
+            }
+        }
+
         trace!("made_changes={made_changes:?}");
         trace!("current_target={current_target:?}");
 
@@ -119,14 +129,13 @@ fn check(args: &FixitArgs) -> CargoResult<(impl Iterator<Item = CheckMessage>, O
 #[allow(clippy::type_complexity)]
 fn collect_errors(
     messages: impl Iterator<Item = CheckMessage>,
-    current_target: &mut Option<BuildUnit>,
     seen: &HashSet<BuildUnit>,
-) -> CargoResult<(
+) -> (
     IndexSet<String>,
-    IndexMap<String, IndexSet<(Suggestion, Option<String>)>>,
-)> {
+    IndexMap<BuildUnit, IndexMap<String, IndexSet<(Suggestion, Option<String>)>>>,
+) {
     let only = HashSet::new();
-    let mut file_map = IndexMap::new();
+    let mut build_unit_map = IndexMap::new();
 
     let mut errors = IndexSet::new();
 
@@ -192,17 +201,15 @@ fn collect_errors(
             continue;
         }
 
-        let current_target = current_target.get_or_insert(build_unit.clone());
-
-        if current_target == &build_unit {
-            file_map
-                .entry(file_name.to_owned())
-                .or_insert_with(IndexSet::new)
-                .insert((suggestion, diagnostic.rendered));
-        }
+        build_unit_map
+            .entry(build_unit)
+            .or_insert_with(IndexMap::new)
+            .entry(file_name.to_owned())
+            .or_insert_with(IndexSet::new)
+            .insert((suggestion, diagnostic.rendered));
     }
 
-    Ok((errors, file_map))
+    (errors, build_unit_map)
 }
 
 #[tracing::instrument(skip_all)]
