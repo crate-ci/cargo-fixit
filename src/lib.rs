@@ -2,16 +2,12 @@
 #![warn(clippy::print_stderr)]
 #![warn(clippy::print_stdout)]
 
-mod check;
+pub mod core;
 mod errors;
-mod flags;
-pub mod shell;
-mod vcs;
+pub mod ops;
+pub mod util;
 
-pub use check::*;
 pub use errors::*;
-pub use flags::CheckFlags;
-pub use vcs::*;
 
 #[doc = include_str!("../README.md")]
 #[cfg(doctest)]

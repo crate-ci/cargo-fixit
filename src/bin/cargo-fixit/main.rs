@@ -2,7 +2,6 @@ use clap::Parser as _;
 use std::ffi::OsStr;
 
 mod cli;
-mod fixit;
 
 fn main() {
     let _guard = setup_logger();

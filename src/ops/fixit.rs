@@ -1,20 +1,26 @@
 use std::{
     collections::HashSet,
     env,
-    io::{BufRead, BufReader},
+    io::{BufRead, BufReader, Cursor},
     path::Path,
     process::Stdio,
 };
 
-use cargo_fixit::{shell, CargoResult, CheckFlags, CheckMessage, Target, VcsOpts};
 use cargo_util::paths;
 use clap::Parser;
 use indexmap::{IndexMap, IndexSet};
-use rustfix::{collect_suggestions, CodeFix};
+use rustfix::{collect_suggestions, CodeFix, Suggestion};
 use tracing::{trace, warn};
 
+use crate::{
+    core::shell,
+    ops::check::{BuildUnit, CheckMessage},
+    util::{cli::CheckFlags, vcs::VcsOpts},
+    CargoResult,
+};
+
 #[derive(Debug, Parser)]
-pub(crate) struct FixitArgs {
+pub struct FixitArgs {
     /// Run `clippy` instead of `check`
     #[arg(long)]
     clippy: bool,
@@ -27,7 +33,7 @@ pub(crate) struct FixitArgs {
 }
 
 impl FixitArgs {
-    pub(crate) fn exec(self) -> CargoResult<()> {
+    pub fn exec(self) -> CargoResult<()> {
         exec(self)
     }
 }
@@ -38,6 +44,7 @@ struct File {
 }
 
 #[tracing::instrument(skip_all)]
+#[allow(clippy::print_stderr)]
 fn exec(args: FixitArgs) -> CargoResult<()> {
     args.vcs_opts.valid_vcs()?;
 
@@ -57,7 +64,21 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
     loop {
         trace!("iteration={iteration}");
         trace!("current_target={current_target:?}");
-        let (errors, made_changes) = run_rustfix(&args, &mut files, &mut current_target, &seen)?;
+        let (messages, _exit_code) = check(&args)?;
+
+        let (mut errors, build_unit_map) = collect_errors(messages, &seen);
+
+        let mut made_changes = false;
+
+        for (build_unit, file_map) in build_unit_map {
+            if current_target.get_or_insert(build_unit.clone()) == &build_unit
+                && fix_errors(&mut files, file_map, &mut errors)?
+            {
+                made_changes = true;
+                break;
+            }
+        }
+
         trace!("made_changes={made_changes:?}");
         trace!("current_target={current_target:?}");
 
@@ -85,37 +106,45 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
     Ok(())
 }
 
-#[tracing::instrument(skip_all)]
-fn run_rustfix(
-    args: &FixitArgs,
-    files: &mut IndexMap<String, File>,
-    current_target: &mut Option<(Target, String)>,
-    seen: &HashSet<(Target, String)>,
-) -> CargoResult<(IndexSet<String>, bool)> {
-    let only = HashSet::new();
-    let mut file_map = IndexMap::new();
-
-    let mut errors = IndexSet::new();
-
+fn check(args: &FixitArgs) -> CargoResult<(impl Iterator<Item = CheckMessage>, Option<i32>)> {
     let cmd = if args.clippy { "clippy" } else { "check" };
-    let mut command = std::process::Command::new(env!("CARGO"))
+    let command = std::process::Command::new(env!("CARGO"))
         .args([cmd, "--message-format", "json"])
         .args(args.check_flags.to_flags())
         .stderr(Stdio::piped())
         .stdout(Stdio::piped())
-        .spawn()?;
+        .output()?;
 
-    let buf = BufReader::new(command.stdout.take().expect("could not capture output"));
+    let buf = BufReader::new(Cursor::new(command.stdout));
 
-    for line in buf.lines() {
-        let Ok(CheckMessage {
-            target,
+    Ok((
+        buf.lines()
+            .map_while(|l| l.ok())
+            .filter_map(|l| serde_json::from_str(&l).ok()),
+        command.status.code(),
+    ))
+}
+
+#[tracing::instrument(skip_all)]
+#[allow(clippy::type_complexity)]
+fn collect_errors(
+    messages: impl Iterator<Item = CheckMessage>,
+    seen: &HashSet<BuildUnit>,
+) -> (
+    IndexSet<String>,
+    IndexMap<BuildUnit, IndexMap<String, IndexSet<(Suggestion, Option<String>)>>>,
+) {
+    let only = HashSet::new();
+    let mut build_unit_map = IndexMap::new();
+
+    let mut errors = IndexSet::new();
+
+    for message in messages {
+        let CheckMessage {
+            build_unit,
             message: diagnostic,
-            package_id,
-        }) = serde_json::from_str(&line?)
-        else {
-            continue;
-        };
+        } = message;
+
         let filter = if env::var("__CARGO_FIX_YOLO").is_ok() {
             rustfix::Filter::Everything
         } else {
@@ -130,15 +159,13 @@ fn run_rustfix(
             continue;
         };
 
-        let file_names = suggestion
+        let mut file_names = suggestion
             .solutions
             .iter()
             .flat_map(|s| s.replacements.iter())
             .map(|r| &r.snippet.file_name);
 
-        let file_name = if let Some(file_name) = file_names.clone().next() {
-            file_name.clone()
-        } else {
+        let Some(file_name) = file_names.next() else {
             trace!("rejecting as it has no solutions {:?}", suggestion);
             if let Some(rendered) = diagnostic.rendered {
                 errors.insert(rendered);
@@ -146,7 +173,7 @@ fn run_rustfix(
             continue;
         };
 
-        if !file_names.clone().all(|f| f == &file_name) {
+        if !file_names.all(|f| f == file_name) {
             trace!("rejecting as it changes multiple files: {:?}", suggestion);
             if let Some(rendered) = diagnostic.rendered {
                 errors.insert(rendered);
@@ -162,12 +189,10 @@ fn run_rustfix(
             }
         }
 
-        let target = (target.clone(), package_id.clone());
-
-        if seen.contains(&target) {
+        if seen.contains(&build_unit) {
             trace!(
                 "rejecting package id `{}` already seen: {:?}",
-                package_id,
+                build_unit.package_id,
                 suggestion,
             );
             if let Some(rendered) = diagnostic.rendered {
@@ -176,18 +201,23 @@ fn run_rustfix(
             continue;
         }
 
-        let current_target = current_target.get_or_insert(target.clone());
-
-        if current_target == &target {
-            file_map
-                .entry(file_name)
-                .or_insert_with(IndexSet::new)
-                .insert((suggestion, diagnostic.rendered));
-        }
+        build_unit_map
+            .entry(build_unit)
+            .or_insert_with(IndexMap::new)
+            .entry(file_name.to_owned())
+            .or_insert_with(IndexSet::new)
+            .insert((suggestion, diagnostic.rendered));
     }
 
-    let _exit_code = command.wait()?;
+    (errors, build_unit_map)
+}
 
+#[tracing::instrument(skip_all)]
+fn fix_errors(
+    files: &mut IndexMap<String, File>,
+    file_map: IndexMap<String, IndexSet<(Suggestion, Option<String>)>>,
+    errors: &mut IndexSet<String>,
+) -> CargoResult<bool> {
     let mut made_changes = false;
     for (file, suggestions) in file_map {
         let code = match paths::read(file.as_ref()) {
@@ -224,5 +254,5 @@ fn run_rustfix(
         }
     }
 
-    Ok((errors, made_changes))
+    Ok(made_changes)
 }
