@@ -110,6 +110,7 @@ fn do_not_fix_broken_builds() {
         .env("__CARGO_FIX_YOLO", "1")
         .with_status(0)
         .with_stderr_data(str![[r#"
+[FIXED] foo v0.0.1
 [FIXED] src/lib.rs (1 fix)
 error[E0308]: mismatched types
  --> src/lib.rs:8:35
@@ -251,6 +252,7 @@ fn do_not_fix_non_relevant_deps() {
         .cwd("foo")
         .with_status(0)
         .with_stderr_data(str![[r#"
+[FIXED] bar v0.1.0
 [FIXED] [ROOT]/foo/bar/src/lib.rs (1 fix)
 
 "#]])
@@ -483,6 +485,7 @@ fn upgrade_extern_crate() {
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(str![[r#"
+[FIXED] foo v0.1.0
 [FIXED] src/lib.rs (1 fix)
 
 "#]])
@@ -556,6 +559,7 @@ fn fixes_extra_mut() {
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(str![[r#"
+[FIXED] foo v0.0.1
 [FIXED] src/lib.rs (1 fix)
 
 "#]])
@@ -582,6 +586,7 @@ fn fixes_two_missing_ampersands() {
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(str![[r#"
+[FIXED] foo v0.0.1
 [FIXED] src/lib.rs (2 fixes)
 
 "#]])
@@ -607,6 +612,7 @@ fn tricky() {
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(str![[r#"
+[FIXED] foo v0.0.1
 [FIXED] src/lib.rs (2 fixes)
 
 "#]])
@@ -630,6 +636,7 @@ fn preserve_line_endings() {
         .env("__CARGO_FIX_YOLO", "1")
         .with_status(0)
         .with_stderr_data(str![[r#"
+[FIXED] foo v0.0.1
 [FIXED] src/lib.rs (1 fix)
 
 "#]])
@@ -652,6 +659,7 @@ fn fix_deny_warnings() {
         .env("__CARGO_FIX_YOLO", "1")
         .with_status(0)
         .with_stderr_data(str![[r#"
+[FIXED] foo v0.0.1
 [FIXED] src/lib.rs (1 fix)
 
 "#]])
@@ -683,6 +691,7 @@ fn fix_deny_warnings_but_not_others() {
         .env("__CARGO_FIX_YOLO", "1")
         .with_status(0)
         .with_stderr_data(str![[r#"
+[FIXED] foo v0.0.1
 [FIXED] src/lib.rs (1 fix)
 
 "#]])
@@ -723,6 +732,7 @@ fn fix_two_files() {
             str![[r#"
 [FIXED] src/bar.rs (1 fix)
 [FIXED] src/lib.rs (1 fix)
+[FIXED] foo v0.0.1
 
 "#]]
             .unordered(),
@@ -804,6 +814,7 @@ fn fix_features() {
     p.cargo_("check").run();
     p.cargo_("fix --features bar --allow-no-vcs")
         .with_stderr_data(str![[r#"
+[FIXED] foo v0.1.0
 [FIXED] src/lib.rs (1 fix)
 
 "#]])
@@ -959,6 +970,7 @@ fn do_not_fix_tests_by_default() {
         .env("__CARGO_FIX_YOLO", "1")
         .with_status(0)
         .with_stderr_data(str![[r#"
+[FIXED] foo v0.0.1
 [FIXED] src/lib.rs (1 fix)
 
 "#]])
@@ -1812,6 +1824,7 @@ fn rustfix_handles_multi_spans() {
     p.cargo_("fix --allow-no-vcs")
         .with_status(0)
         .with_stderr_data(str![[r#"
+[FIXED] foo v0.1.0
 [FIXED] src/lib.rs (1 fix)
 
 "#]])
@@ -1897,6 +1910,7 @@ fn fix_shared_cross_workspace() {
         .with_stderr_data(
             str![[r#"
 [FIXED] [..]foo/src/shared.rs (2 fixes)
+[FIXED] [..] v0.1.0
 
 "#]]
             .unordered(),
@@ -1981,6 +1995,7 @@ fn abnormal_exit() {
         )
         // "signal: 6, SIGABRT: process abort signal" on some platforms
         .with_stderr_data(str![[r#"
+[FIXED] foo v0.1.0
 [FIXED] src/lib.rs (1 fix)
 [WARNING] unused variable: `x`
  --> src/lib.rs:3:25
@@ -2609,6 +2624,7 @@ fn main() {
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(str![[r#"
+[FIXED] foo v0.0.1
 [FIXED] src/main.rs (1 fix)
 
 "#]])

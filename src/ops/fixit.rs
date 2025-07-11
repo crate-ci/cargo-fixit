@@ -15,7 +15,7 @@ use tracing::{trace, warn};
 use crate::{
     core::shell,
     ops::check::{BuildUnit, CheckMessage},
-    util::{cli::CheckFlags, vcs::VcsOpts},
+    util::{cli::CheckFlags, package::format_package_id, vcs::VcsOpts},
     CargoResult,
 };
 
@@ -88,6 +88,9 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
 
         if !made_changes || iteration >= max_iterations {
             if let Some(pkg) = current_target {
+                if seen.iter().all(|b| b.package_id != pkg.package_id) {
+                    shell::status("Fixed", format_package_id(&pkg.package_id)?)?;
+                }
                 seen.insert(pkg);
                 current_target = None;
                 iteration = 0;
