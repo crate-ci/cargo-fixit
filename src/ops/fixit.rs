@@ -71,7 +71,8 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
         let mut made_changes = false;
 
         for (build_unit, file_map) in build_unit_map {
-            if current_target.get_or_insert(build_unit.clone()) == &build_unit
+            if !file_map.is_empty()
+                && current_target.get_or_insert(build_unit.clone()) == &build_unit
                 && fix_errors(&mut files, file_map, &mut errors)?
             {
                 made_changes = true;
@@ -145,6 +146,18 @@ fn collect_errors(
             message: diagnostic,
         } = message;
 
+        if seen.contains(&build_unit) {
+            trace!("rejecting build unit `{:?}` already seen", build_unit);
+            if let Some(rendered) = diagnostic.rendered {
+                errors.insert(rendered);
+            }
+            continue;
+        }
+
+        let file_map = build_unit_map
+            .entry(build_unit.clone())
+            .or_insert_with(IndexMap::new);
+
         let filter = if env::var("__CARGO_FIX_YOLO").is_ok() {
             rustfix::Filter::Everything
         } else {
@@ -189,21 +202,7 @@ fn collect_errors(
             }
         }
 
-        if seen.contains(&build_unit) {
-            trace!(
-                "rejecting package id `{}` already seen: {:?}",
-                build_unit.package_id,
-                suggestion,
-            );
-            if let Some(rendered) = diagnostic.rendered {
-                errors.insert(rendered);
-            }
-            continue;
-        }
-
-        build_unit_map
-            .entry(build_unit)
-            .or_insert_with(IndexMap::new)
+        file_map
             .entry(file_name.to_owned())
             .or_insert_with(IndexSet::new)
             .insert((suggestion, diagnostic.rendered));
