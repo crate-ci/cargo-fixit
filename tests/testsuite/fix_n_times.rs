@@ -314,7 +314,10 @@ fn fix_no_suggestions() {
     expect_fix_runs_rustc_n_times(
         &[Step::SuccessNoOutput],
         |_execs| {},
-        str![""],
+        str![[r#"
+[CHECKING] foo v0.0.1
+
+"#]],
         "// fix-count 0",
         0,
     );
@@ -423,6 +426,7 @@ fn warnings() {
         &[Step::Warning],
         |_execs| {},
         str![[r#"
+[CHECKING] foo v0.0.1
 rustc fix shim warning count=1
 
 
@@ -439,6 +443,7 @@ fn starts_with_error() {
         &[Step::Error],
         |_execs| {},
         str![[r#"
+[CHECKING] foo v0.0.1
 rustc fix shim error count=1
 
 

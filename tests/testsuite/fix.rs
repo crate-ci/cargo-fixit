@@ -485,6 +485,7 @@ fn upgrade_extern_crate() {
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(str![[r#"
+[CHECKING] bar v0.1.0
 [FIXED] foo v0.1.0
 [FIXED] src/lib.rs (1 fix)
 
@@ -536,7 +537,10 @@ fn no_changes_necessary() {
     let p = project().file("src/lib.rs", "").build();
 
     p.cargo_("fix --allow-no-vcs")
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[CHECKING] foo v0.0.1
+
+"#]])
         .with_stdout_data("")
         .with_status(0)
         .run();
@@ -809,7 +813,10 @@ fn fix_features() {
 
     p.cargo_("fix --allow-no-vcs")
         .with_status(0)
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[CHECKING] foo v0.1.0
+
+"#]])
         .run();
     p.cargo_("check").run();
     p.cargo_("fix --features bar --allow-no-vcs")
@@ -833,6 +840,7 @@ fn shows_warnings() {
 
     p.cargo_("fix --allow-no-vcs")
         .with_stderr_data(str![[r#"
+[CHECKING] foo v0.0.1
 [WARNING] use of deprecated function `bar`
  --> src/lib.rs:1:50
   |
@@ -860,7 +868,10 @@ Error: no VCS found for this package and `cargo fix` can potentially perform des
         .run();
     p.cargo_("fix --allow-no-vcs")
         .with_status(0)
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[CHECKING] foo v0.0.1
+
+"#]])
         .run();
 }
 
@@ -883,7 +894,10 @@ Error: the working directory of this package has uncommitted changes, and `cargo
         .run();
     p.cargo_("fix --allow-dirty")
         .with_status(0)
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[CHECKING] foo v0.0.1
+
+"#]])
         .run();
 }
 
@@ -907,7 +921,10 @@ Error: the working directory of this package has uncommitted changes, and `cargo
         .run();
     p.cargo_("fix --allow-staged")
         .with_status(0)
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[CHECKING] foo v0.0.1
+
+"#]])
         .run();
 }
 
@@ -932,7 +949,10 @@ Error: the working directory of this package has uncommitted changes, and `cargo
         .run();
     p.cargo_("fix --allow-dirty")
         .with_status(0)
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[CHECKING] foo v0.0.1
+
+"#]])
         .run();
 }
 
@@ -941,7 +961,10 @@ fn does_not_warn_about_clean_working_directory() {
     let p = git::new("foo", |p| p.file("src/lib.rs", "pub fn foo() {}"));
     p.cargo_("fix")
         .with_status(0)
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[CHECKING] foo v0.0.1
+
+"#]])
         .run();
 }
 
@@ -956,7 +979,10 @@ fn does_not_warn_about_dirty_ignored_files() {
 
     p.cargo_("fix")
         .with_status(0)
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[CHECKING] foo v0.0.1
+
+"#]])
         .run();
 }
 
@@ -1273,6 +1299,7 @@ fn shows_warnings_on_second_run_without_changes() {
 
     p.cargo_("fix --allow-no-vcs")
         .with_stderr_data(str![[r#"
+[CHECKING] foo v0.0.1
 [WARNING] use of deprecated function `bar`
  --> src/lib.rs:6:29
   |
@@ -1288,6 +1315,7 @@ fn shows_warnings_on_second_run_without_changes() {
 
     p.cargo_("fix --allow-no-vcs")
         .with_stderr_data(str![[r#"
+[CHECKING] foo v0.0.1
 [WARNING] use of deprecated function `bar`
  --> src/lib.rs:6:29
   |
@@ -1463,7 +1491,10 @@ fn does_not_crash_with_rustc_wrapper() {
     p.cargo_("fix --allow-no-vcs")
         .env("RUSTC_WRAPPER", echo_wrapper())
         .with_status(0)
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[CHECKING] foo v0.1.0
+
+"#]])
         .run();
     p.build_dir().rm_rf();
     p.cargo_("fix --allow-no-vcs --verbose")
@@ -1700,7 +1731,10 @@ fn fix_in_existing_repo_weird_ignore() {
 
     p.cargo_("fix")
         .with_status(0)
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[CHECKING] foo v0.0.1
+
+"#]])
         .run();
     // This is questionable about whether it is the right behavior. It should
     // probably be checking if any source file for the current project is
@@ -1995,6 +2029,7 @@ fn abnormal_exit() {
         )
         // "signal: 6, SIGABRT: process abort signal" on some platforms
         .with_stderr_data(str![[r#"
+[CHECKING] pm v0.1.0
 [FIXED] foo v0.1.0
 [FIXED] src/lib.rs (1 fix)
 [WARNING] unused variable: `x`
@@ -2288,7 +2323,11 @@ fn fix_in_dependency() {
     // compiler output.
     p.cargo_("fix --lib --allow-no-vcs")
         .env("RUSTC", &rustc_bin)
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[CHECKING] bar v1.0.0
+[CHECKING] foo v0.1.0
+
+"#]])
         .with_status(0)
         .run();
 }
