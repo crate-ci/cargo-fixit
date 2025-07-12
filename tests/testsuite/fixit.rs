@@ -21,6 +21,7 @@ fn basic() {
     p.cargo_("fixit --allow-no-vcs")
         .with_status(0)
         .with_stderr_data(str![[r#"
+[FIXED] foo v0.0.1
 [FIXED] src/lib.rs (1 fix)
 
 "#]])
@@ -57,6 +58,7 @@ fn fixable_and_unfixable() {
     p.cargo_("fixit --allow-no-vcs")
         .with_status(0)
         .with_stderr_data(str![[r#"
+[FIXED] foo v0.0.1
 [FIXED] src/lib.rs (1 fix)
 [WARNING] unused variable: `c`
  --> src/lib.rs:6:21
@@ -154,6 +156,7 @@ fn build_unit_order() {
     p.cargo_("fixit --allow-no-vcs")
         .with_status(0)
         .with_stderr_data(str![[r#"
+[FIXED] foo v0.1.0
 [FIXED] build.rs (1 fix)
 [FIXED] src/lib.rs (1 fix)
 [FIXED] src/main.rs (1 fix)
