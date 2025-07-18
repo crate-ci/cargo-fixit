@@ -117,7 +117,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
 fn check(args: &FixitArgs) -> CargoResult<(impl Iterator<Item = CheckOutput>, Option<i32>)> {
     let cmd = if args.clippy { "clippy" } else { "check" };
     let command = std::process::Command::new(env!("CARGO"))
-        .args([cmd, "--message-format", "json"])
+        .args([cmd, "--message-format", "json-diagnostic-rendered-ansi"])
         .args(args.check_flags.to_flags())
         .stderr(Stdio::piped())
         .stdout(Stdio::piped())
