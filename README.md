@@ -1,10 +1,28 @@
 # cargo-fixit
 
-> Proposed fixit commands for cargo ([rust-lang/cargo#13214](https://github.com/rust-lang/cargo/issues/13214))
+> Protoype for alternative `cargo fix` ([rust-lang/cargo#13214](https://github.com/rust-lang/cargo/issues/13214))
 
 [![Documentation](https://img.shields.io/badge/docs-master-blue.svg)][Documentation]
 ![License](https://img.shields.io/crates/l/cargo-fixit.svg)
 [![Crates Status](https://img.shields.io/crates/v/cargo-fixit.svg)][Crates.io]
+
+This is meant to be a drop-in replacement for `cargo fix`, except faster.
+
+Before
+```console
+$ cargo fix
+$ cargo clippy --fix
+```
+After
+```console
+$ cargo install cargo-fixit
+$ cargo fixit
+$ cargo fixit --clippy
+```
+
+Expectations
+- Edition migration is unsupported
+- The CLI is modeled off of `cargo fix` 1.89 (no implicit `--all-targets`)
 
 ## License
 
