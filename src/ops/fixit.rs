@@ -14,8 +14,8 @@ use tracing::{trace, warn};
 
 use crate::{
     core::shell,
-    ops::check::{BuildUnit, CheckMessage},
-    util::{cli::CheckFlags, vcs::VcsOpts},
+    ops::check::{BuildUnit, CheckOutput, Message},
+    util::{cli::CheckFlags, package::format_package_id, vcs::VcsOpts},
     CargoResult,
 };
 
@@ -71,7 +71,12 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
         let mut made_changes = false;
 
         for (build_unit, file_map) in build_unit_map {
-            if !file_map.is_empty()
+            if current_target.is_none() && file_map.is_empty() {
+                if seen.iter().all(|b| b.package_id != build_unit.package_id) {
+                    shell::status("Checking", format_package_id(&build_unit.package_id)?)?;
+                }
+                seen.insert(build_unit);
+            } else if !file_map.is_empty()
                 && current_target.get_or_insert(build_unit.clone()) == &build_unit
                 && fix_errors(&mut files, file_map, &mut errors)?
             {
@@ -88,6 +93,9 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
 
         if !made_changes || iteration >= max_iterations {
             if let Some(pkg) = current_target {
+                if seen.iter().all(|b| b.package_id != pkg.package_id) {
+                    shell::status("Fixed", format_package_id(&pkg.package_id)?)?;
+                }
                 seen.insert(pkg);
                 current_target = None;
                 iteration = 0;
@@ -107,7 +115,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
     Ok(())
 }
 
-fn check(args: &FixitArgs) -> CargoResult<(impl Iterator<Item = CheckMessage>, Option<i32>)> {
+fn check(args: &FixitArgs) -> CargoResult<(impl Iterator<Item = CheckOutput>, Option<i32>)> {
     let cmd = if args.clippy { "clippy" } else { "check" };
     let command = std::process::Command::new(env!("CARGO"))
         .args([cmd, "--message-format", "json"])
@@ -129,7 +137,7 @@ fn check(args: &FixitArgs) -> CargoResult<(impl Iterator<Item = CheckMessage>, O
 #[tracing::instrument(skip_all)]
 #[allow(clippy::type_complexity)]
 fn collect_errors(
-    messages: impl Iterator<Item = CheckMessage>,
+    messages: impl Iterator<Item = CheckOutput>,
     seen: &HashSet<BuildUnit>,
 ) -> (
     IndexSet<String>,
@@ -141,10 +149,20 @@ fn collect_errors(
     let mut errors = IndexSet::new();
 
     for message in messages {
-        let CheckMessage {
+        let Message {
             build_unit,
             message: diagnostic,
-        } = message;
+        } = match message {
+            CheckOutput::Message(m) => m,
+            CheckOutput::Artifact(a) => {
+                if !seen.contains(&a.build_unit) && !a.fresh {
+                    build_unit_map
+                        .entry(a.build_unit.clone())
+                        .or_insert(IndexMap::new());
+                }
+                continue;
+            }
+        };
 
         if seen.contains(&build_unit) {
             trace!("rejecting build unit `{:?}` already seen", build_unit);
@@ -156,7 +174,7 @@ fn collect_errors(
 
         let file_map = build_unit_map
             .entry(build_unit.clone())
-            .or_insert_with(IndexMap::new);
+            .or_insert(IndexMap::new());
 
         let filter = if env::var("__CARGO_FIX_YOLO").is_ok() {
             rustfix::Filter::Everything

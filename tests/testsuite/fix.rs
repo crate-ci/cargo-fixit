@@ -110,6 +110,7 @@ fn do_not_fix_broken_builds() {
         .env("__CARGO_FIX_YOLO", "1")
         .with_status(0)
         .with_stderr_data(str![[r#"
+[FIXED] foo v0.0.1
 [FIXED] src/lib.rs (1 fix)
 error[E0308]: mismatched types
  --> src/lib.rs:8:35
@@ -251,6 +252,7 @@ fn do_not_fix_non_relevant_deps() {
         .cwd("foo")
         .with_status(0)
         .with_stderr_data(str![[r#"
+[FIXED] bar v0.1.0
 [FIXED] [ROOT]/foo/bar/src/lib.rs (1 fix)
 
 "#]])
@@ -483,6 +485,8 @@ fn upgrade_extern_crate() {
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(str![[r#"
+[CHECKING] bar v0.1.0
+[FIXED] foo v0.1.0
 [FIXED] src/lib.rs (1 fix)
 
 "#]])
@@ -533,7 +537,10 @@ fn no_changes_necessary() {
     let p = project().file("src/lib.rs", "").build();
 
     p.cargo_("fix --allow-no-vcs")
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[CHECKING] foo v0.0.1
+
+"#]])
         .with_stdout_data("")
         .with_status(0)
         .run();
@@ -556,6 +563,7 @@ fn fixes_extra_mut() {
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(str![[r#"
+[FIXED] foo v0.0.1
 [FIXED] src/lib.rs (1 fix)
 
 "#]])
@@ -582,6 +590,7 @@ fn fixes_two_missing_ampersands() {
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(str![[r#"
+[FIXED] foo v0.0.1
 [FIXED] src/lib.rs (2 fixes)
 
 "#]])
@@ -607,6 +616,7 @@ fn tricky() {
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(str![[r#"
+[FIXED] foo v0.0.1
 [FIXED] src/lib.rs (2 fixes)
 
 "#]])
@@ -630,6 +640,7 @@ fn preserve_line_endings() {
         .env("__CARGO_FIX_YOLO", "1")
         .with_status(0)
         .with_stderr_data(str![[r#"
+[FIXED] foo v0.0.1
 [FIXED] src/lib.rs (1 fix)
 
 "#]])
@@ -652,6 +663,7 @@ fn fix_deny_warnings() {
         .env("__CARGO_FIX_YOLO", "1")
         .with_status(0)
         .with_stderr_data(str![[r#"
+[FIXED] foo v0.0.1
 [FIXED] src/lib.rs (1 fix)
 
 "#]])
@@ -683,6 +695,7 @@ fn fix_deny_warnings_but_not_others() {
         .env("__CARGO_FIX_YOLO", "1")
         .with_status(0)
         .with_stderr_data(str![[r#"
+[FIXED] foo v0.0.1
 [FIXED] src/lib.rs (1 fix)
 
 "#]])
@@ -723,6 +736,7 @@ fn fix_two_files() {
             str![[r#"
 [FIXED] src/bar.rs (1 fix)
 [FIXED] src/lib.rs (1 fix)
+[FIXED] foo v0.0.1
 
 "#]]
             .unordered(),
@@ -799,11 +813,15 @@ fn fix_features() {
 
     p.cargo_("fix --allow-no-vcs")
         .with_status(0)
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[CHECKING] foo v0.1.0
+
+"#]])
         .run();
     p.cargo_("check").run();
     p.cargo_("fix --features bar --allow-no-vcs")
         .with_stderr_data(str![[r#"
+[FIXED] foo v0.1.0
 [FIXED] src/lib.rs (1 fix)
 
 "#]])
@@ -822,6 +840,7 @@ fn shows_warnings() {
 
     p.cargo_("fix --allow-no-vcs")
         .with_stderr_data(str![[r#"
+[CHECKING] foo v0.0.1
 [WARNING] use of deprecated function `bar`
  --> src/lib.rs:1:50
   |
@@ -849,7 +868,10 @@ Error: no VCS found for this package and `cargo fix` can potentially perform des
         .run();
     p.cargo_("fix --allow-no-vcs")
         .with_status(0)
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[CHECKING] foo v0.0.1
+
+"#]])
         .run();
 }
 
@@ -872,7 +894,10 @@ Error: the working directory of this package has uncommitted changes, and `cargo
         .run();
     p.cargo_("fix --allow-dirty")
         .with_status(0)
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[CHECKING] foo v0.0.1
+
+"#]])
         .run();
 }
 
@@ -896,7 +921,10 @@ Error: the working directory of this package has uncommitted changes, and `cargo
         .run();
     p.cargo_("fix --allow-staged")
         .with_status(0)
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[CHECKING] foo v0.0.1
+
+"#]])
         .run();
 }
 
@@ -921,7 +949,10 @@ Error: the working directory of this package has uncommitted changes, and `cargo
         .run();
     p.cargo_("fix --allow-dirty")
         .with_status(0)
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[CHECKING] foo v0.0.1
+
+"#]])
         .run();
 }
 
@@ -930,7 +961,10 @@ fn does_not_warn_about_clean_working_directory() {
     let p = git::new("foo", |p| p.file("src/lib.rs", "pub fn foo() {}"));
     p.cargo_("fix")
         .with_status(0)
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[CHECKING] foo v0.0.1
+
+"#]])
         .run();
 }
 
@@ -945,7 +979,10 @@ fn does_not_warn_about_dirty_ignored_files() {
 
     p.cargo_("fix")
         .with_status(0)
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[CHECKING] foo v0.0.1
+
+"#]])
         .run();
 }
 
@@ -959,6 +996,7 @@ fn do_not_fix_tests_by_default() {
         .env("__CARGO_FIX_YOLO", "1")
         .with_status(0)
         .with_stderr_data(str![[r#"
+[FIXED] foo v0.0.1
 [FIXED] src/lib.rs (1 fix)
 
 "#]])
@@ -1261,6 +1299,7 @@ fn shows_warnings_on_second_run_without_changes() {
 
     p.cargo_("fix --allow-no-vcs")
         .with_stderr_data(str![[r#"
+[CHECKING] foo v0.0.1
 [WARNING] use of deprecated function `bar`
  --> src/lib.rs:6:29
   |
@@ -1276,6 +1315,7 @@ fn shows_warnings_on_second_run_without_changes() {
 
     p.cargo_("fix --allow-no-vcs")
         .with_stderr_data(str![[r#"
+[CHECKING] foo v0.0.1
 [WARNING] use of deprecated function `bar`
  --> src/lib.rs:6:29
   |
@@ -1451,7 +1491,10 @@ fn does_not_crash_with_rustc_wrapper() {
     p.cargo_("fix --allow-no-vcs")
         .env("RUSTC_WRAPPER", echo_wrapper())
         .with_status(0)
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[CHECKING] foo v0.1.0
+
+"#]])
         .run();
     p.build_dir().rm_rf();
     p.cargo_("fix --allow-no-vcs --verbose")
@@ -1688,7 +1731,10 @@ fn fix_in_existing_repo_weird_ignore() {
 
     p.cargo_("fix")
         .with_status(0)
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[CHECKING] foo v0.0.1
+
+"#]])
         .run();
     // This is questionable about whether it is the right behavior. It should
     // probably be checking if any source file for the current project is
@@ -1812,6 +1858,7 @@ fn rustfix_handles_multi_spans() {
     p.cargo_("fix --allow-no-vcs")
         .with_status(0)
         .with_stderr_data(str![[r#"
+[FIXED] foo v0.1.0
 [FIXED] src/lib.rs (1 fix)
 
 "#]])
@@ -1897,6 +1944,7 @@ fn fix_shared_cross_workspace() {
         .with_stderr_data(
             str![[r#"
 [FIXED] [..]foo/src/shared.rs (2 fixes)
+[FIXED] [..] v0.1.0
 
 "#]]
             .unordered(),
@@ -1981,6 +2029,8 @@ fn abnormal_exit() {
         )
         // "signal: 6, SIGABRT: process abort signal" on some platforms
         .with_stderr_data(str![[r#"
+[CHECKING] pm v0.1.0
+[FIXED] foo v0.1.0
 [FIXED] src/lib.rs (1 fix)
 [WARNING] unused variable: `x`
  --> src/lib.rs:3:25
@@ -2273,7 +2323,11 @@ fn fix_in_dependency() {
     // compiler output.
     p.cargo_("fix --lib --allow-no-vcs")
         .env("RUSTC", &rustc_bin)
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+[CHECKING] bar v1.0.0
+[CHECKING] foo v0.1.0
+
+"#]])
         .with_status(0)
         .run();
 }
@@ -2609,6 +2663,7 @@ fn main() {
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(str![[r#"
+[FIXED] foo v0.0.1
 [FIXED] src/main.rs (1 fix)
 
 "#]])
