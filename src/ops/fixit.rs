@@ -44,7 +44,6 @@ struct File {
 }
 
 #[tracing::instrument(skip_all)]
-#[allow(clippy::print_stderr)]
 fn exec(args: FixitArgs) -> CargoResult<()> {
     args.vcs_opts.valid_vcs()?;
 
@@ -109,7 +108,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
     }
 
     for e in last_errors {
-        eprint!("{}\n\n", e.trim_end());
+        shell::print_ansi_stderr(format!("{}\n\n", e.trim_end()).as_bytes())?;
     }
 
     Ok(())

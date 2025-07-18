@@ -38,6 +38,12 @@ pub fn fixed(file_name: impl std::fmt::Display, fixes: u32) -> CargoResult<()> {
     )
 }
 
+pub fn print_ansi_stderr(message: &[u8]) -> CargoResult<()> {
+    let mut stderr = anstream::stderr().lock();
+    stderr.write_all(message)?;
+    Ok(())
+}
+
 /// Print a message with a colored title in the style of Cargo shell messages.
 fn print(
     status: &str,
