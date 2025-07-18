@@ -7,25 +7,6 @@ use std::io::Write;
 
 use crate::CargoResult;
 
-/// Print a message with a colored title in the style of Cargo shell messages.
-pub fn print(
-    status: &str,
-    message: impl std::fmt::Display,
-    style: Style,
-    justified: bool,
-) -> CargoResult<()> {
-    let mut stderr = anstream::stderr().lock();
-    if justified {
-        write!(stderr, "{style}{status:>12}{style:#}")?;
-    } else {
-        write!(stderr, "{style}{status}{style:#}:")?;
-    }
-
-    writeln!(stderr, " {message:#}").with_context(|| "Failed to write message")?;
-
-    Ok(())
-}
-
 /// Print a styled action message.
 pub fn status(action: &str, message: impl std::fmt::Display) -> CargoResult<()> {
     print(action, message, HEADER, true)
@@ -55,4 +36,23 @@ pub fn fixed(file_name: impl std::fmt::Display, fixes: u32) -> CargoResult<()> {
             if fixes == 1 { "fix" } else { "fixes" }
         ),
     )
+}
+
+/// Print a message with a colored title in the style of Cargo shell messages.
+fn print(
+    status: &str,
+    message: impl std::fmt::Display,
+    style: Style,
+    justified: bool,
+) -> CargoResult<()> {
+    let mut stderr = anstream::stderr().lock();
+    if justified {
+        write!(stderr, "{style}{status:>12}{style:#}")?;
+    } else {
+        write!(stderr, "{style}{status}{style:#}:")?;
+    }
+
+    writeln!(stderr, " {message:#}").with_context(|| "Failed to write message")?;
+
+    Ok(())
 }
