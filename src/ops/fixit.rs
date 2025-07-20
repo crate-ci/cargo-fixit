@@ -70,6 +70,10 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
         let mut made_changes = false;
 
         for (build_unit, file_map) in build_unit_map {
+            let build_unit_errors = errors
+                .entry(build_unit.clone())
+                .or_insert_with(IndexSet::new);
+
             if current_target.is_none() && file_map.is_empty() {
                 if seen.iter().all(|b| b.package_id != build_unit.package_id) {
                     shell::status("Checking", format_package_id(&build_unit.package_id)?)?;
@@ -77,7 +81,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
                 seen.insert(build_unit);
             } else if !file_map.is_empty()
                 && current_target.get_or_insert(build_unit.clone()) == &build_unit
-                && fix_errors(&mut files, file_map, &mut errors)?
+                && fix_errors(&mut files, file_map, build_unit_errors)?
             {
                 made_changes = true;
                 break;
@@ -107,7 +111,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
         shell::fixed(name, file.fixes)?;
     }
 
-    for e in last_errors {
+    for e in last_errors.iter().flat_map(|(_, e)| e) {
         shell::print_ansi_stderr(format!("{}\n\n", e.trim_end()).as_bytes())?;
     }
 
@@ -139,13 +143,13 @@ fn collect_errors(
     messages: impl Iterator<Item = CheckOutput>,
     seen: &HashSet<BuildUnit>,
 ) -> (
-    IndexSet<String>,
+    IndexMap<BuildUnit, IndexSet<String>>,
     IndexMap<BuildUnit, IndexMap<String, IndexSet<(Suggestion, Option<String>)>>>,
 ) {
     let only = HashSet::new();
     let mut build_unit_map = IndexMap::new();
 
-    let mut errors = IndexSet::new();
+    let mut errors = IndexMap::new();
 
     for message in messages {
         let Message {
@@ -162,6 +166,10 @@ fn collect_errors(
                 continue;
             }
         };
+
+        let errors = errors
+            .entry(build_unit.clone())
+            .or_insert_with(IndexSet::new);
 
         if seen.contains(&build_unit) {
             trace!("rejecting build unit `{:?}` already seen", build_unit);
