@@ -392,6 +392,8 @@ fn fix_verification_failed() {
         str![[r#"
 [FIXED] foo v0.0.1
 [FIXED] src/lib.rs (1 fix)
+rustc fix shim error count=2
+
 
 "#]],
         "// fix-count 1",
@@ -412,6 +414,8 @@ fn fix_verification_failed_clippy() {
         str![[r#"
 [FIXED] foo v0.0.1
 [FIXED] src/lib.rs (1 fix)
+rustc fix shim error count=2
+
 
 "#]],
         "// fix-count 1",

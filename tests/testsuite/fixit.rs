@@ -196,9 +196,7 @@ fn print_errors_after_fixed() {
         .with_status(0)
         .with_stderr_data(str![[r#"
 [FIXED] b v0.1.0
-[FIXED] a v0.1.0
 [FIXED] b/src/lib.rs (1 fix)
-[FIXED] a/src/lib.rs (1 fix)
 [WARNING] function `bar` is never used
  --> b/src/lib.rs:1:5
   |
@@ -207,6 +205,8 @@ fn print_errors_after_fixed() {
   |
   = [NOTE] `#[warn(dead_code)]` on by default
 
+[FIXED] a v0.1.0
+[FIXED] a/src/lib.rs (1 fix)
 [WARNING] function `bar` is never used
  --> a/src/lib.rs:1:5
   |
