@@ -1,6 +1,6 @@
 # cargo-fixit
 
-> Protoype for alternative `cargo fix` ([rust-lang/cargo#13214](https://github.com/rust-lang/cargo/issues/13214))
+> Prototype for alternative `cargo fix` ([rust-lang/cargo#13214](https://github.com/rust-lang/cargo/issues/13214))
 
 [![Documentation](https://img.shields.io/badge/docs-master-blue.svg)][Documentation]
 ![License](https://img.shields.io/crates/l/cargo-fixit.svg)
