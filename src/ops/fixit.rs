@@ -47,7 +47,7 @@ struct File {
 fn exec(args: FixitArgs) -> CargoResult<()> {
     args.vcs_opts.valid_vcs()?;
 
-    let mut files = IndexMap::new();
+    let mut files: IndexMap<String, File> = IndexMap::new();
 
     let max_iterations: usize = env::var("CARGO_FIX_MAX_RETRIES")
         .ok()
@@ -55,9 +55,8 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
         .unwrap_or(4);
     let mut iteration = 0;
 
-    let mut last_errors;
-
-    let mut current_target = None;
+    let mut last_errors = IndexMap::new();
+    let mut current_target: Option<BuildUnit> = None;
     let mut seen = HashSet::new();
 
     loop {
@@ -67,9 +66,38 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
 
         let (mut errors, build_unit_map) = collect_errors(messages, &seen);
 
+        if iteration >= max_iterations {
+            if let Some(target) = current_target {
+                if seen.iter().all(|b| b.package_id != target.package_id) {
+                    shell::status("Fixed", format_package_id(&target.package_id)?)?;
+                }
+
+                let errors = errors.entry(target.clone()).or_insert_with(IndexSet::new);
+
+                if let Some(e) = build_unit_map.get(&target) {
+                    for (_, e) in e.iter().flat_map(|(_, s)| s) {
+                        let Some(e) = e else {
+                            continue;
+                        };
+                        errors.insert(e.to_owned());
+                    }
+                }
+
+                seen.insert(target);
+                current_target = None;
+                iteration = 0;
+            } else {
+                break;
+            }
+        }
+
         let mut made_changes = false;
 
         for (build_unit, file_map) in build_unit_map {
+            if seen.contains(&build_unit) {
+                continue;
+            }
+
             let build_unit_errors = errors
                 .entry(build_unit.clone())
                 .or_insert_with(IndexSet::new);
@@ -94,7 +122,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
         last_errors = errors;
         iteration += 1;
 
-        if !made_changes || iteration >= max_iterations {
+        if !made_changes {
             if let Some(pkg) = current_target {
                 if seen.iter().all(|b| b.package_id != pkg.package_id) {
                     shell::status("Fixed", format_package_id(&pkg.package_id)?)?;
