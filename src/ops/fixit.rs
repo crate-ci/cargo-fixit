@@ -47,7 +47,7 @@ struct File {
 fn exec(args: FixitArgs) -> CargoResult<()> {
     args.vcs_opts.valid_vcs()?;
 
-    let mut files = IndexMap::new();
+    let mut files: IndexMap<String, File> = IndexMap::new();
 
     let max_iterations: usize = env::var("CARGO_FIX_MAX_RETRIES")
         .ok()
@@ -55,9 +55,8 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
         .unwrap_or(4);
     let mut iteration = 0;
 
-    let mut last_errors;
-
-    let mut current_target = None;
+    let mut last_errors = IndexMap::new();
+    let mut current_target: Option<BuildUnit> = None;
     let mut seen = HashSet::new();
 
     loop {
@@ -67,17 +66,63 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
 
         let (mut errors, build_unit_map) = collect_errors(messages, &seen);
 
+        if iteration >= max_iterations {
+            if let Some(target) = current_target {
+                if seen.iter().all(|b| b.package_id != target.package_id) {
+                    shell::status("Fixed", format_package_id(&target.package_id)?)?;
+                }
+
+                for (name, file) in files {
+                    shell::fixed(name, file.fixes)?;
+                }
+                files = IndexMap::new();
+
+                let mut errors = errors.shift_remove(&target).unwrap_or_else(IndexSet::new);
+
+                if let Some(e) = build_unit_map.get(&target) {
+                    for (_, e) in e.iter().flat_map(|(_, s)| s) {
+                        let Some(e) = e else {
+                            continue;
+                        };
+                        errors.insert(e.to_owned());
+                    }
+                }
+                for e in errors {
+                    shell::print_ansi_stderr(format!("{}\n\n", e.trim_end()).as_bytes())?;
+                }
+
+                seen.insert(target);
+                current_target = None;
+                iteration = 0;
+            } else {
+                break;
+            }
+        }
+
         let mut made_changes = false;
 
         for (build_unit, file_map) in build_unit_map {
+            if seen.contains(&build_unit) {
+                continue;
+            }
+
+            let build_unit_errors = errors
+                .entry(build_unit.clone())
+                .or_insert_with(IndexSet::new);
+
             if current_target.is_none() && file_map.is_empty() {
                 if seen.iter().all(|b| b.package_id != build_unit.package_id) {
                     shell::status("Checking", format_package_id(&build_unit.package_id)?)?;
                 }
+                for e in build_unit_errors.iter() {
+                    shell::print_ansi_stderr(format!("{}\n\n", e.trim_end()).as_bytes())?;
+                }
+                errors.shift_remove(&build_unit);
+
                 seen.insert(build_unit);
             } else if !file_map.is_empty()
                 && current_target.get_or_insert(build_unit.clone()) == &build_unit
-                && fix_errors(&mut files, file_map, &mut errors)?
+                && fix_errors(&mut files, file_map, build_unit_errors)?
             {
                 made_changes = true;
                 break;
@@ -90,11 +135,22 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
         last_errors = errors;
         iteration += 1;
 
-        if !made_changes || iteration >= max_iterations {
+        if !made_changes {
             if let Some(pkg) = current_target {
                 if seen.iter().all(|b| b.package_id != pkg.package_id) {
                     shell::status("Fixed", format_package_id(&pkg.package_id)?)?;
                 }
+
+                for (name, file) in files {
+                    shell::fixed(name, file.fixes)?;
+                }
+                files = IndexMap::new();
+
+                let errors = last_errors.shift_remove(&pkg).unwrap_or_else(IndexSet::new);
+                for e in errors {
+                    shell::print_ansi_stderr(format!("{}\n\n", e.trim_end()).as_bytes())?;
+                }
+
                 seen.insert(pkg);
                 current_target = None;
                 iteration = 0;
@@ -103,11 +159,12 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
             }
         }
     }
+
     for (name, file) in files {
         shell::fixed(name, file.fixes)?;
     }
 
-    for e in last_errors {
+    for e in last_errors.iter().flat_map(|(_, e)| e) {
         shell::print_ansi_stderr(format!("{}\n\n", e.trim_end()).as_bytes())?;
     }
 
@@ -139,13 +196,13 @@ fn collect_errors(
     messages: impl Iterator<Item = CheckOutput>,
     seen: &HashSet<BuildUnit>,
 ) -> (
-    IndexSet<String>,
+    IndexMap<BuildUnit, IndexSet<String>>,
     IndexMap<BuildUnit, IndexMap<String, IndexSet<(Suggestion, Option<String>)>>>,
 ) {
     let only = HashSet::new();
     let mut build_unit_map = IndexMap::new();
 
-    let mut errors = IndexSet::new();
+    let mut errors = IndexMap::new();
 
     for message in messages {
         let Message {
@@ -163,11 +220,12 @@ fn collect_errors(
             }
         };
 
+        let errors = errors
+            .entry(build_unit.clone())
+            .or_insert_with(IndexSet::new);
+
         if seen.contains(&build_unit) {
             trace!("rejecting build unit `{:?}` already seen", build_unit);
-            if let Some(rendered) = diagnostic.rendered {
-                errors.insert(rendered);
-            }
             continue;
         }
 

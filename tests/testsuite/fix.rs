@@ -2032,14 +2032,6 @@ fn abnormal_exit() {
 [CHECKING] pm v0.1.0
 [FIXED] foo v0.1.0
 [FIXED] src/lib.rs (1 fix)
-[WARNING] unused variable: `x`
- --> src/lib.rs:3:25
-  |
-3 |                     let x = 1;
-  |                         ^ [HELP] if this is intentional, prefix it with an underscore: `_x`
-  |
-  = [NOTE] `#[warn(unused_variables)]` on by default
-
 
 "#]])
         .with_status(0)
