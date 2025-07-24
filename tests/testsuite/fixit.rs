@@ -164,3 +164,58 @@ fn build_unit_order() {
 "#]])
         .run();
 }
+
+#[cargo_test]
+fn print_errors_after_fixed() {
+    let p = project()
+        .file(
+            "Cargo.toml",
+            r#"
+            [workspace]
+            members = [ "a", "b" ]
+            "#,
+        )
+        .file(
+            "a/Cargo.toml",
+            r#"
+                [package]
+                name = "a"
+                version = "0.1.0"
+                edition = "2024"
+
+                [dependencies]
+                b = { path = "../b" }
+            "#,
+        )
+        .file("a/src/lib.rs", "use std as foo; fn bar() {}")
+        .file("b/Cargo.toml", &basic_manifest("b", "0.1.0"))
+        .file("b/src/lib.rs", "use std as foo; fn bar() {}")
+        .build();
+
+    p.cargo_("fixit --allow-no-vcs")
+        .with_status(0)
+        .with_stderr_data(str![[r#"
+[FIXED] b v0.1.0
+[FIXED] a v0.1.0
+[FIXED] b/src/lib.rs (1 fix)
+[FIXED] a/src/lib.rs (1 fix)
+[WARNING] function `bar` is never used
+ --> b/src/lib.rs:1:5
+  |
+1 |  fn bar() {}
+  |     ^^^
+  |
+  = [NOTE] `#[warn(dead_code)]` on by default
+
+[WARNING] function `bar` is never used
+ --> a/src/lib.rs:1:5
+  |
+1 |  fn bar() {}
+  |     ^^^
+  |
+  = [NOTE] `#[warn(dead_code)]` on by default
+
+
+"#]])
+        .run();
+}
