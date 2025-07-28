@@ -108,10 +108,8 @@ fn do_not_fix_broken_builds() {
 
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
-        .with_status(0)
+        .with_status(1)
         .with_stderr_data(str![[r#"
-[CHECKING] foo v0.0.1
-[FIXED] src/lib.rs (1 fix)
 error[E0308]: mismatched types
  --> src/lib.rs:8:35
   |
@@ -120,12 +118,24 @@ error[E0308]: mismatched types
   |                             |
   |                             expected due to this
 
+[WARNING] variable does not need to be mutable
+ --> src/lib.rs:3:25
+  |
+3 |                     let mut x = 3;
+  |                         ----^
+  |                         |
+  |                         [HELP] remove this `mut`
+  |
+  = [NOTE] `#[warn(unused_mut)]` on by default
+
 For more information about this error, try `rustc --explain E0308`.
 
+[NOTE] try using `--broken-code` to fix errors
+[ERROR] could not compile
 
 "#]])
         .run();
-    assert!(p.read_file("src/lib.rs").contains("let x = 3;"));
+    assert!(!p.read_file("src/lib.rs").contains("let x = 3;"));
 }
 
 #[cargo_test]
@@ -144,15 +154,10 @@ fn fix_broken_if_requested() {
 
     p.cargo_("fix --allow-no-vcs --broken-code")
         .env("__CARGO_FIX_YOLO", "1")
-        .with_status(2)
+        .with_status(0)
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--broken-code' found
-
-  tip: a similar argument exists: '--bench'
-
-Usage: cargo fixit <--allow-no-vcs|--allow-dirty|--allow-staged> <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>>
-
-For more information, try '--help'.
+[CHECKING] foo v0.0.1
+[FIXED] src/lib.rs (1 fix)
 
 "#]])
         .run();
@@ -661,10 +666,25 @@ fn fix_deny_warnings() {
 
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
-        .with_status(0)
+        .with_status(1)
         .with_stderr_data(str![[r#"
-[CHECKING] foo v0.0.1
-[FIXED] src/lib.rs (1 fix)
+[ERROR] variable does not need to be mutable
+ --> src/lib.rs:2:33
+  |
+2 |              pub fn foo() { let mut x = 3; let _ = x; }
+  |                                 ----^
+  |                                 |
+  |                                 [HELP] remove this `mut`
+  |
+[NOTE] the lint level is defined here
+ --> src/lib.rs:1:9
+  |
+1 | #![deny(warnings)]
+  |         ^^^^^^^^
+  = [NOTE] `#[deny(unused_mut)]` implied by `#[deny(warnings)]`
+
+[NOTE] try using `--broken-code` to fix errors
+[ERROR] could not compile
 
 "#]])
         .run();
@@ -693,14 +713,28 @@ fn fix_deny_warnings_but_not_others() {
 
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
-        .with_status(0)
+        .with_status(1)
         .with_stderr_data(str![[r#"
-[CHECKING] foo v0.0.1
-[FIXED] src/lib.rs (1 fix)
+[ERROR] variable does not need to be mutable
+ --> src/lib.rs:5:25
+  |
+5 |                     let mut x = 3;
+  |                         ----^
+  |                         |
+  |                         [HELP] remove this `mut`
+  |
+[NOTE] the lint level is defined here
+ --> src/lib.rs:2:25
+  |
+2 |                 #![deny(unused_mut)]
+  |                         ^^^^^^^^^^
+
+[NOTE] try using `--broken-code` to fix errors
+[ERROR] could not compile
 
 "#]])
         .run();
-    assert!(p.read_file("src/lib.rs").contains("let x = 3;"));
+    assert!(!p.read_file("src/lib.rs").contains("let x = 3;"));
     assert!(p.read_file("src/lib.rs").contains("let mut _y = 4;"));
 }
 
@@ -1669,21 +1703,16 @@ fn fix_to_broken_code() {
         .cwd("bar")
         .env("RUSTC", p.root().join("foo/target/debug/foo"))
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--broken-code' found
-
-  tip: a similar argument exists: '--bench'
-
-Usage: cargo fixit <--allow-no-vcs|--allow-dirty|--allow-staged> <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>>
-
-For more information, try '--help'.
+[CHECKING] bar v0.1.0
+[FIXED] src/lib.rs (1 fix)
 
 "#]])
-        .with_status(2)
+        .with_status(0)
         .run();
 
     assert_e2e().eq(
         p.read_file("bar/src/lib.rs"),
-        str!["pub fn foo() { let mut x = 3; let _ = x; }"],
+        str!["pub fn foo() { let x = 3; let _ = x; }"],
     );
 }
 
@@ -2030,11 +2059,33 @@ fn abnormal_exit() {
         // "signal: 6, SIGABRT: process abort signal" on some platforms
         .with_stderr_data(str![[r#"
 [CHECKING] pm v0.1.0
-[CHECKING] foo v0.1.0
-[FIXED] src/lib.rs (1 fix)
+[NOTE] reverting `src/lib.rs` to its original state
+[WARNING] The errors reported are:
+The original errors are:
+[WARNING] unused variable: `x`
+ --> src/lib.rs:3:29
+  |
+3 |                     let mut x = 1;
+  |                             ^ [HELP] if this is intentional, prefix it with an underscore: `_x`
+  |
+  = [NOTE] `#[warn(unused_variables)]` on by default
+
+[WARNING] variable does not need to be mutable
+ --> src/lib.rs:3:25
+  |
+3 |                     let mut x = 1;
+  |                         ----^
+  |                         |
+  |                         [HELP] remove this `mut`
+  |
+  = [NOTE] `#[warn(unused_mut)]` on by default
+
+
+[NOTE] try using `--broken-code` to fix errors
+[ERROR] could not compile
 
 "#]])
-        .with_status(0)
+        .with_status(1)
         .run();
 }
 
@@ -2616,15 +2667,9 @@ fn fix_in_rust_src() {
     p.cargo_("fix --lib --allow-no-vcs --broken-code")
         .env("__CARGO_FIX_YOLO", "1")
         .env("RUSTC", &rustc_bin)
-        .with_status(2)
+        .with_status(0)
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--broken-code' found
-
-  tip: a similar argument exists: '--bench'
-
-Usage: cargo fixit <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>> <--allow-no-vcs|--allow-dirty|--allow-staged>
-
-For more information, try '--help'.
+[CHECKING] foo v0.0.0
 
 "#]])
         .run();
