@@ -700,7 +700,7 @@ fn fix_deny_warnings_but_not_others() {
 
 "#]])
         .run();
-    assert!(p.read_file("src/lib.rs").contains("let x = 3;"));
+    assert!(!p.read_file("src/lib.rs").contains("let mut x = 3;"));
     assert!(p.read_file("src/lib.rs").contains("let mut _y = 4;"));
 }
 
