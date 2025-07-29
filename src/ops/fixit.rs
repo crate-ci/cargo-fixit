@@ -277,6 +277,11 @@ fn collect_errors(
             }
         }
 
+        // Do not write into standard library source. See rust-lang/cargo#9857.
+        if file_name.contains("rustlib") {
+            continue;
+        }
+
         file_map
             .entry(file_name.to_owned())
             .or_insert_with(IndexSet::new)
