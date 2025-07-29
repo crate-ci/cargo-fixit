@@ -666,25 +666,10 @@ fn fix_deny_warnings() {
 
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
-        .with_status(1)
+        .with_status(0)
         .with_stderr_data(str![[r#"
-[ERROR] variable does not need to be mutable
- --> src/lib.rs:2:33
-  |
-2 |              pub fn foo() { let mut x = 3; let _ = x; }
-  |                                 ----^
-  |                                 |
-  |                                 [HELP] remove this `mut`
-  |
-[NOTE] the lint level is defined here
- --> src/lib.rs:1:9
-  |
-1 | #![deny(warnings)]
-  |         ^^^^^^^^
-  = [NOTE] `#[deny(unused_mut)]` implied by `#[deny(warnings)]`
-
-[NOTE] try using `--broken-code` to fix errors
-[ERROR] could not compile
+[CHECKING] foo v0.0.1
+[FIXED] src/lib.rs (1 fix)
 
 "#]])
         .run();
@@ -713,28 +698,14 @@ fn fix_deny_warnings_but_not_others() {
 
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
-        .with_status(1)
+        .with_status(0)
         .with_stderr_data(str![[r#"
-[ERROR] variable does not need to be mutable
- --> src/lib.rs:5:25
-  |
-5 |                     let mut x = 3;
-  |                         ----^
-  |                         |
-  |                         [HELP] remove this `mut`
-  |
-[NOTE] the lint level is defined here
- --> src/lib.rs:2:25
-  |
-2 |                 #![deny(unused_mut)]
-  |                         ^^^^^^^^^^
-
-[NOTE] try using `--broken-code` to fix errors
-[ERROR] could not compile
+[CHECKING] foo v0.0.1
+[FIXED] src/lib.rs (1 fix)
 
 "#]])
         .run();
-    assert!(!p.read_file("src/lib.rs").contains("let x = 3;"));
+    assert!(!p.read_file("src/lib.rs").contains("let mut x = 3;"));
     assert!(p.read_file("src/lib.rs").contains("let mut _y = 4;"));
 }
 
