@@ -1,3 +1,4 @@
+use cargo_fixit::core::shell;
 use clap::Parser as _;
 use std::ffi::OsStr;
 
@@ -9,7 +10,7 @@ fn main() {
     let args = cli::Command::parse();
 
     if let Err(err) = args.exec() {
-        eprintln!("Error: {err:?}");
+        shell::error(&err).unwrap();
 
         std::process::exit(1);
     }

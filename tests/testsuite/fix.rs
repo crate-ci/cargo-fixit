@@ -862,7 +862,7 @@ fn warns_if_no_vcs_detected() {
     p.cargo_("fix")
         .with_status(1)
         .with_stderr_data(str![[r#"
-Error: no VCS found for this package and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-no-vcs`
+[ERROR] no VCS found for this package and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-no-vcs`
 
 "#]])
         .run();
@@ -884,7 +884,7 @@ fn warns_about_dirty_working_directory() {
     p.cargo_("fix")
         .with_status(1)
         .with_stderr_data(str![[r#"
-Error: the working directory of this package has uncommitted changes, and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-dirty`, or commit the changes to these files:
+[ERROR] the working directory of this package has uncommitted changes, and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-dirty`, or commit the changes to these files:
 
   * src/lib.rs (dirty)
 
@@ -911,7 +911,7 @@ fn warns_about_staged_working_directory() {
     p.cargo_("fix")
         .with_status(1)
         .with_stderr_data(str![[r#"
-Error: the working directory of this package has uncommitted changes, and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-dirty`, or commit the changes to these files:
+[ERROR] the working directory of this package has uncommitted changes, and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-dirty`, or commit the changes to these files:
 
   * src/lib.rs (staged)
 
@@ -938,7 +938,7 @@ fn errors_about_untracked_files() {
     p.cargo_("fix")
         .with_status(1)
         .with_stderr_data(str![[r#"
-Error: the working directory of this package has uncommitted changes, and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-dirty`, or commit the changes to these files:
+[ERROR] the working directory of this package has uncommitted changes, and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-dirty`, or commit the changes to these files:
 
   * Cargo.toml (dirty)
   * src/ (dirty)
@@ -1742,7 +1742,7 @@ fn fix_in_existing_repo_weird_ignore() {
     p.cargo_("fix")
         .cwd("inner")
         .with_stderr_data(str![[r#"
-Error: no VCS found for this package and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-no-vcs`
+[ERROR] no VCS found for this package and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-no-vcs`
 
 "#]])
         .with_status(1)
@@ -3300,7 +3300,7 @@ fn fix_edition_future() {
     p.cargo_("fix -Zfix-edition=end=2024,future")
         .masquerade_as_nightly_cargo(&["fix-edition"])
         .with_stderr_data(str![[r#"
-Error: no VCS found for this package and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-no-vcs`
+[ERROR] no VCS found for this package and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-no-vcs`
 
 "#]])
         .with_status(1)
