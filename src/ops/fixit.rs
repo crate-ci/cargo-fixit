@@ -69,7 +69,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
         if iteration >= max_iterations {
             if let Some(target) = current_target {
                 if seen.iter().all(|b| b.package_id != target.package_id) {
-                    shell::status("Fixed", format_package_id(&target.package_id)?)?;
+                    shell::status("Checking", format_package_id(&target.package_id)?)?;
                 }
 
                 for (name, file) in files {
@@ -138,7 +138,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
         if !made_changes {
             if let Some(pkg) = current_target {
                 if seen.iter().all(|b| b.package_id != pkg.package_id) {
-                    shell::status("Fixed", format_package_id(&pkg.package_id)?)?;
+                    shell::status("Checking", format_package_id(&pkg.package_id)?)?;
                 }
 
                 for (name, file) in files {
