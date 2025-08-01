@@ -330,7 +330,7 @@ fn fix_one_suggestion() {
         &[Step::OneFix, Step::SuccessNoOutput, Step::SuccessNoOutput],
         |_execs| {},
         str![[r#"
-[FIXED] foo v0.0.1
+[CHECKING] foo v0.0.1
 [FIXED] src/lib.rs (1 fix)
 
 "#]],
@@ -346,7 +346,7 @@ fn fix_one_overlapping() {
         &[Step::TwoFixOverlapping, Step::SuccessNoOutput, Step::SuccessNoOutput],
         |_execs| {},
         str![[r#"
-[FIXED] foo v0.0.1
+[CHECKING] foo v0.0.1
 [FIXED] src/lib.rs (1 fix)
 
 "#]],
@@ -369,7 +369,7 @@ fn fix_overlapping_max() {
         ],
         |_execs| {},
         str![[r#"
-[FIXED] foo v0.0.1
+[CHECKING] foo v0.0.1
 [FIXED] src/lib.rs (4 fixes)
 rustc fix shim comment 5
 
@@ -390,7 +390,7 @@ fn fix_verification_failed() {
         &[Step::OneFix, Step::Error, Step::SuccessNoOutput],
         |_execs| {},
         str![[r#"
-[FIXED] foo v0.0.1
+[CHECKING] foo v0.0.1
 [FIXED] src/lib.rs (1 fix)
 rustc fix shim error count=2
 
@@ -412,7 +412,7 @@ fn fix_verification_failed_clippy() {
             execs.env("RUSTC_WORKSPACE_WRAPPER", wrapped_clippy_driver());
         },
         str![[r#"
-[FIXED] foo v0.0.1
+[CHECKING] foo v0.0.1
 [FIXED] src/lib.rs (1 fix)
 rustc fix shim error count=2
 
