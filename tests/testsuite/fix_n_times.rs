@@ -387,17 +387,21 @@ fn fix_verification_failed() {
     // One suggested fix, with an error in the verification step.
     // This should cause `cargo fix` to back out the changes.
     expect_fix_runs_rustc_n_times(
-        &[Step::OneFix, Step::Error, Step::SuccessNoOutput],
+        &[Step::OneFix, Step::Error],
         |_execs| {},
         str![[r#"
-[CHECKING] foo v0.0.1
-[FIXED] src/lib.rs (1 fix)
+[NOTE] reverting `src/lib.rs` to its original state
+[WARNING] The errors reported are:
 rustc fix shim error count=2
 
+The original errors are:
+
+[NOTE] try using `--broken-code` to fix errors
+[ERROR] could not compile
 
 "#]],
-        "// fix-count 1",
-        0,
+        "// fix-count 0",
+        1,
     );
 }
 
@@ -407,19 +411,23 @@ fn fix_verification_failed_clippy() {
     // the error message has the customization for the clippy URL and
     // subcommand.
     expect_fix_runs_rustc_n_times(
-        &[Step::OneFix, Step::Error, Step::SuccessNoOutput],
+        &[Step::OneFix, Step::Error],
         |execs| {
             execs.env("RUSTC_WORKSPACE_WRAPPER", wrapped_clippy_driver());
         },
         str![[r#"
-[CHECKING] foo v0.0.1
-[FIXED] src/lib.rs (1 fix)
+[NOTE] reverting `src/lib.rs` to its original state
+[WARNING] The errors reported are:
 rustc fix shim error count=2
 
+The original errors are:
+
+[NOTE] try using `--broken-code` to fix errors
+[ERROR] could not compile
 
 "#]],
-        "// fix-count 1",
-        0,
+        "// fix-count 0",
+        1,
     );
 }
 
@@ -447,13 +455,14 @@ fn starts_with_error() {
         &[Step::Error],
         |_execs| {},
         str![[r#"
-[CHECKING] foo v0.0.1
 rustc fix shim error count=1
 
+[NOTE] try using `--broken-code` to fix errors
+[ERROR] could not compile
 
 "#]],
         "// fix-count 0",
-        0,
+        1,
     );
 }
 
@@ -466,17 +475,13 @@ fn broken_code_no_suggestions() {
             execs.arg("--broken-code");
         },
         str![[r#"
-[ERROR] unexpected argument '--broken-code' found
+[CHECKING] foo v0.0.1
+rustc fix shim error count=1
 
-  tip: a similar argument exists: '--bench'
-
-Usage: cargo fixit <--allow-no-vcs|--allow-dirty|--allow-staged> <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>>
-
-For more information, try '--help'.
 
 "#]],
         "// fix-count 0",
-        2,
+        0,
     );
 }
 
@@ -484,21 +489,18 @@ For more information, try '--help'.
 fn broken_code_one_suggestion() {
     // --broken-code where there is an error and a suggestion.
     expect_fix_runs_rustc_n_times(
-        &[Step::OneFixError, Step::Error],
+        &[Step::OneFixError, Step::Error, Step::SuccessNoOutput],
         |execs| {
             execs.arg("--broken-code");
         },
         str![[r#"
-[ERROR] unexpected argument '--broken-code' found
+[CHECKING] foo v0.0.1
+[FIXED] src/lib.rs (1 fix)
+rustc fix shim error count=2
 
-  tip: a similar argument exists: '--bench'
-
-Usage: cargo fixit <--allow-no-vcs|--allow-dirty|--allow-staged> <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>>
-
-For more information, try '--help'.
 
 "#]],
         "// fix-count 1",
-        2,
+        0,
     );
 }

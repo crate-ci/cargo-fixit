@@ -25,6 +25,10 @@ pub struct FixitArgs {
     #[arg(long)]
     clippy: bool,
 
+    /// Fix code even if it already has compiler errors
+    #[arg(long)]
+    broken_code: bool,
+
     #[command(flatten)]
     vcs_opts: VcsOpts,
 
@@ -41,6 +45,7 @@ impl FixitArgs {
 #[derive(Debug, Default)]
 struct File {
     fixes: u32,
+    original_code: String,
 }
 
 #[tracing::instrument(skip_all)]
@@ -62,7 +67,54 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
     loop {
         trace!("iteration={iteration}");
         trace!("current_target={current_target:?}");
-        let (messages, _exit_code) = check(&args)?;
+        let (messages, exit_code) = check(&args)?;
+
+        if !args.broken_code && exit_code.is_none_or(|code| code != 0) {
+            let mut out = String::new();
+
+            if current_target.is_some() {
+                out.push_str("The errors reported are:\n");
+                for e in messages.filter_map(|e| match e {
+                    CheckOutput::Message(m) => m.message.rendered,
+                    _ => None,
+                }) {
+                    out.push_str(&format!("{}\n\n", e.trim_end()));
+                }
+
+                for (
+                    file,
+                    File {
+                        fixes: _,
+                        original_code,
+                    },
+                ) in &files
+                {
+                    shell::note(format!("reverting `{file}` to its original state"))?;
+                    paths::write(file, original_code)?;
+                }
+
+                out.push_str("The original errors are:\n");
+                let (messages, _) = check(&args)?;
+                for e in messages.filter_map(|e| match e {
+                    CheckOutput::Message(m) => m.message.rendered,
+                    _ => None,
+                }) {
+                    out.push_str(&format!("{}\n\n", e.trim_end()));
+                }
+
+                shell::warn(out)?;
+            } else {
+                for e in messages.filter_map(|e| match e {
+                    CheckOutput::Message(m) => m.message.rendered,
+                    _ => None,
+                }) {
+                    shell::print_ansi_stderr(format!("{}\n\n", e.trim_end()).as_bytes())?;
+                }
+            }
+
+            shell::note("try using `--broken-code` to fix errors")?;
+            anyhow::bail!("could not compile");
+        }
 
         let (mut errors, build_unit_map) = collect_errors(messages, &seen);
 
@@ -131,6 +183,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
 
         trace!("made_changes={made_changes:?}");
         trace!("current_target={current_target:?}");
+        trace!("files={files:?}");
 
         last_errors = errors;
         iteration += 1;
@@ -176,6 +229,8 @@ fn check(args: &FixitArgs) -> CargoResult<(impl Iterator<Item = CheckOutput>, Op
     let command = std::process::Command::new(env!("CARGO"))
         .args([cmd, "--message-format", "json-diagnostic-rendered-ansi"])
         .args(args.check_flags.to_flags())
+        // This allows `cargo fix` to work even if the crate has #[deny(warnings)].
+        .env("RUSTFLAGS", "--cap-lints=warn")
         .stderr(Stdio::piped())
         .stdout(Stdio::piped())
         .output()?;
@@ -277,6 +332,11 @@ fn collect_errors(
             }
         }
 
+        // Do not write into standard library source. See rust-lang/cargo#9857.
+        if file_name.contains("rustlib") {
+            continue;
+        }
+
         file_map
             .entry(file_name.to_owned())
             .or_insert_with(IndexSet::new)
@@ -324,7 +384,13 @@ fn fix_errors(
             let new_code = fixed.finish()?;
             paths::write(&file, new_code)?;
             made_changes = true;
-            files.entry(file).or_default().fixes += num_fixes;
+            files
+                .entry(file)
+                .or_insert(File {
+                    fixes: 0,
+                    original_code: code,
+                })
+                .fixes += num_fixes;
         }
     }
 

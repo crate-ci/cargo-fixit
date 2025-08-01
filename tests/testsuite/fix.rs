@@ -108,10 +108,8 @@ fn do_not_fix_broken_builds() {
 
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
-        .with_status(0)
+        .with_status(1)
         .with_stderr_data(str![[r#"
-[CHECKING] foo v0.0.1
-[FIXED] src/lib.rs (1 fix)
 error[E0308]: mismatched types
  --> src/lib.rs:8:35
   |
@@ -120,12 +118,24 @@ error[E0308]: mismatched types
   |                             |
   |                             expected due to this
 
+[WARNING] variable does not need to be mutable
+ --> src/lib.rs:3:25
+  |
+3 |                     let mut x = 3;
+  |                         ----^
+  |                         |
+  |                         [HELP] remove this `mut`
+  |
+  = [NOTE] `#[warn(unused_mut)]` on by default
+
 For more information about this error, try `rustc --explain E0308`.
 
+[NOTE] try using `--broken-code` to fix errors
+[ERROR] could not compile
 
 "#]])
         .run();
-    assert!(p.read_file("src/lib.rs").contains("let x = 3;"));
+    assert!(!p.read_file("src/lib.rs").contains("let x = 3;"));
 }
 
 #[cargo_test]
@@ -144,15 +154,10 @@ fn fix_broken_if_requested() {
 
     p.cargo_("fix --allow-no-vcs --broken-code")
         .env("__CARGO_FIX_YOLO", "1")
-        .with_status(2)
+        .with_status(0)
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--broken-code' found
-
-  tip: a similar argument exists: '--bench'
-
-Usage: cargo fixit <--allow-no-vcs|--allow-dirty|--allow-staged> <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>>
-
-For more information, try '--help'.
+[CHECKING] foo v0.0.1
+[FIXED] src/lib.rs (1 fix)
 
 "#]])
         .run();
@@ -700,7 +705,7 @@ fn fix_deny_warnings_but_not_others() {
 
 "#]])
         .run();
-    assert!(p.read_file("src/lib.rs").contains("let x = 3;"));
+    assert!(!p.read_file("src/lib.rs").contains("let mut x = 3;"));
     assert!(p.read_file("src/lib.rs").contains("let mut _y = 4;"));
 }
 
@@ -862,7 +867,7 @@ fn warns_if_no_vcs_detected() {
     p.cargo_("fix")
         .with_status(1)
         .with_stderr_data(str![[r#"
-Error: no VCS found for this package and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-no-vcs`
+[ERROR] no VCS found for this package and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-no-vcs`
 
 "#]])
         .run();
@@ -884,7 +889,7 @@ fn warns_about_dirty_working_directory() {
     p.cargo_("fix")
         .with_status(1)
         .with_stderr_data(str![[r#"
-Error: the working directory of this package has uncommitted changes, and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-dirty`, or commit the changes to these files:
+[ERROR] the working directory of this package has uncommitted changes, and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-dirty`, or commit the changes to these files:
 
   * src/lib.rs (dirty)
 
@@ -911,7 +916,7 @@ fn warns_about_staged_working_directory() {
     p.cargo_("fix")
         .with_status(1)
         .with_stderr_data(str![[r#"
-Error: the working directory of this package has uncommitted changes, and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-dirty`, or commit the changes to these files:
+[ERROR] the working directory of this package has uncommitted changes, and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-dirty`, or commit the changes to these files:
 
   * src/lib.rs (staged)
 
@@ -938,7 +943,7 @@ fn errors_about_untracked_files() {
     p.cargo_("fix")
         .with_status(1)
         .with_stderr_data(str![[r#"
-Error: the working directory of this package has uncommitted changes, and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-dirty`, or commit the changes to these files:
+[ERROR] the working directory of this package has uncommitted changes, and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-dirty`, or commit the changes to these files:
 
   * Cargo.toml (dirty)
   * src/ (dirty)
@@ -1669,21 +1674,16 @@ fn fix_to_broken_code() {
         .cwd("bar")
         .env("RUSTC", p.root().join("foo/target/debug/foo"))
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--broken-code' found
-
-  tip: a similar argument exists: '--bench'
-
-Usage: cargo fixit <--allow-no-vcs|--allow-dirty|--allow-staged> <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>>
-
-For more information, try '--help'.
+[CHECKING] bar v0.1.0
+[FIXED] src/lib.rs (1 fix)
 
 "#]])
-        .with_status(2)
+        .with_status(0)
         .run();
 
     assert_e2e().eq(
         p.read_file("bar/src/lib.rs"),
-        str!["pub fn foo() { let mut x = 3; let _ = x; }"],
+        str!["pub fn foo() { let x = 3; let _ = x; }"],
     );
 }
 
@@ -1742,7 +1742,7 @@ fn fix_in_existing_repo_weird_ignore() {
     p.cargo_("fix")
         .cwd("inner")
         .with_stderr_data(str![[r#"
-Error: no VCS found for this package and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-no-vcs`
+[ERROR] no VCS found for this package and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-no-vcs`
 
 "#]])
         .with_status(1)
@@ -2030,11 +2030,33 @@ fn abnormal_exit() {
         // "signal: 6, SIGABRT: process abort signal" on some platforms
         .with_stderr_data(str![[r#"
 [CHECKING] pm v0.1.0
-[CHECKING] foo v0.1.0
-[FIXED] src/lib.rs (1 fix)
+[NOTE] reverting `src/lib.rs` to its original state
+[WARNING] The errors reported are:
+The original errors are:
+[WARNING] unused variable: `x`
+ --> src/lib.rs:3:29
+  |
+3 |                     let mut x = 1;
+  |                             ^ [HELP] if this is intentional, prefix it with an underscore: `_x`
+  |
+  = [NOTE] `#[warn(unused_variables)]` on by default
+
+[WARNING] variable does not need to be mutable
+ --> src/lib.rs:3:25
+  |
+3 |                     let mut x = 1;
+  |                         ----^
+  |                         |
+  |                         [HELP] remove this `mut`
+  |
+  = [NOTE] `#[warn(unused_mut)]` on by default
+
+
+[NOTE] try using `--broken-code` to fix errors
+[ERROR] could not compile
 
 "#]])
-        .with_status(0)
+        .with_status(1)
         .run();
 }
 
@@ -2616,15 +2638,9 @@ fn fix_in_rust_src() {
     p.cargo_("fix --lib --allow-no-vcs --broken-code")
         .env("__CARGO_FIX_YOLO", "1")
         .env("RUSTC", &rustc_bin)
-        .with_status(2)
+        .with_status(0)
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--broken-code' found
-
-  tip: a similar argument exists: '--bench'
-
-Usage: cargo fixit <--package <SPEC>|--workspace|--exclude <SPEC>|--all|--lib|--bins|--bin <NAME>|--examples|--example <NAME>|--tests|--test <NAME>|--benches|--bench <NAME>|--all-targets|--features <FEATURES>|--all-features|--no-default-features|-Z <FLAG>> <--allow-no-vcs|--allow-dirty|--allow-staged>
-
-For more information, try '--help'.
+[CHECKING] foo v0.0.0
 
 "#]])
         .run();
@@ -3300,7 +3316,7 @@ fn fix_edition_future() {
     p.cargo_("fix -Zfix-edition=end=2024,future")
         .masquerade_as_nightly_cargo(&["fix-edition"])
         .with_stderr_data(str![[r#"
-Error: no VCS found for this package and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-no-vcs`
+[ERROR] no VCS found for this package and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-no-vcs`
 
 "#]])
         .with_status(1)
