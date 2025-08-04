@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Fixes
+
+- Report errors immediately, rather than when done
+- Format output more like cargo
+
 ## [0.1.1] - 2025-07-18
 
 ## [0.1.0] - 2025-07-18
