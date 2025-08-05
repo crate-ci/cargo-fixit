@@ -13,7 +13,7 @@ use rustfix::{collect_suggestions, CodeFix, Suggestion};
 use tracing::{trace, warn};
 
 use crate::{
-    core::shell,
+    core::{shell, sysroot::get_sysroot},
     ops::check::{BuildUnit, CheckOutput, Message},
     util::{cli::CheckFlags, package::format_package_id, vcs::VcsOpts},
     CargoResult,
@@ -275,6 +275,12 @@ fn collect_errors(
         // Do not write into registry cache. See rust-lang/cargo#9857.
         if let Ok(home) = env::var("CARGO_HOME") {
             if file_path.starts_with(home) {
+                continue;
+            }
+        }
+
+        if let Some(sysroot) = get_sysroot() {
+            if file_path.starts_with(sysroot) {
                 continue;
             }
         }
