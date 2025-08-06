@@ -15,7 +15,10 @@ use tracing::{trace, warn};
 use crate::{
     core::shell,
     ops::check::{BuildUnit, CheckOutput, Message},
-    util::{cli::CheckFlags, package::format_package_id, vcs::VcsOpts},
+    util::{
+        cli::CheckFlags, messages::gen_please_report_this_bug_text, package::format_package_id,
+        vcs::VcsOpts,
+    },
     CargoResult,
 };
 
@@ -92,6 +95,8 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
                     paths::write(file, original_source)?;
                 }
                 out.push('\n');
+
+                out.push_str(&gen_please_report_this_bug_text(args.clippy));
 
                 let mut errors = messages
                     .filter_map(|e| match e {
