@@ -296,7 +296,7 @@ fn fix_errors(
 ) -> CargoResult<bool> {
     let mut made_changes = false;
     for (file, suggestions) in file_map {
-        let code = match paths::read(file.as_ref()) {
+        let source = match paths::read(file.as_ref()) {
             Ok(s) => s,
             Err(e) => {
                 warn!("failed to read `{}`: {}", file, e);
@@ -305,7 +305,7 @@ fn fix_errors(
             }
         };
 
-        let mut fixed = CodeFix::new(&code);
+        let mut fixed = CodeFix::new(&source);
         let mut num_fixes = 0;
 
         for (suggestion, rendered) in suggestions.iter().rev() {
@@ -323,8 +323,8 @@ fn fix_errors(
             }
         }
         if fixed.modified() {
-            let new_code = fixed.finish()?;
-            paths::write(&file, new_code)?;
+            let new_source = fixed.finish()?;
+            paths::write(&file, new_source)?;
             made_changes = true;
             files.entry(file).or_default().fixes += num_fixes;
         }
