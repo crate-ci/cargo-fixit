@@ -362,6 +362,9 @@ fn collect_errors(
 
         if let Some(sysroot) = get_sysroot() {
             if file_path.starts_with(sysroot) {
+                if let Some(rendered) = diagnostic.rendered {
+                    errors.insert(rendered);
+                }
                 continue;
             }
         }
