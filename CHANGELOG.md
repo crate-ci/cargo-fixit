@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Features
+
+- Support `-p` short flag
+
+### Fixes
+
+- Show errors from sysroot
+- Show errors from registry / git dependencies
+
 ## [0.1.5] - 2025-08-07
 
 ### Features
