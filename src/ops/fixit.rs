@@ -353,12 +353,18 @@ fn collect_errors(
         // Do not write into registry cache. See rust-lang/cargo#9857.
         if let Ok(home) = env::var("CARGO_HOME") {
             if file_path.starts_with(home) {
+                if let Some(rendered) = diagnostic.rendered {
+                    errors.insert(rendered);
+                }
                 continue;
             }
         }
 
         if let Some(sysroot) = get_sysroot() {
             if file_path.starts_with(sysroot) {
+                if let Some(rendered) = diagnostic.rendered {
+                    errors.insert(rendered);
+                }
                 continue;
             }
         }
