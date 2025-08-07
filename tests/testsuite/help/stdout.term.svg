@@ -46,7 +46,7 @@
 </tspan>
     <tspan x="10px" y="280px"><tspan>Package Selection:</tspan>
 </tspan>
-    <tspan x="10px" y="298px"><tspan>      --package &lt;SPEC&gt;  Package(s) to fix</tspan>
+    <tspan x="10px" y="298px"><tspan>  -p, --package &lt;SPEC&gt;  Package(s) to fix</tspan>
 </tspan>
     <tspan x="10px" y="316px"><tspan>      --workspace       Fix all packages in the workspace</tspan>
 </tspan>

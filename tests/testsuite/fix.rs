@@ -208,16 +208,14 @@ fn fix_path_deps() {
         .with_stdout_data("")
         .with_stderr_data(
             str![[r#"
-
-
-For more information, try '--help'.
-Usage: cargo fixit [OPTIONS]
-[ERROR] unexpected argument '-p' found
+[CHECKING] bar v0.1.0
+[FIXED] bar/src/lib.rs (1 fix)
+[CHECKING] foo v0.1.0
+[FIXED] src/lib.rs (1 fix)
 
 "#]]
             .unordered(),
         )
-        .with_status(2)
         .run();
 }
 
@@ -1453,28 +1451,16 @@ fn doesnt_rebuild_dependencies() {
         .env("__CARGO_FIX_YOLO", "1")
         .with_stdout_data("")
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '-p' found
-
-Usage: cargo fixit [OPTIONS]
-
-For more information, try '--help'.
+[CHECKING] bar v0.1.0
+[CHECKING] foo v0.1.0
 
 "#]])
-        .with_status(2)
         .run();
 
     p.cargo_("fix --allow-no-vcs -p foo")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stdout_data("")
-        .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '-p' found
-
-Usage: cargo fixit [OPTIONS]
-
-For more information, try '--help'.
-
-"#]])
-        .with_status(2)
+        .with_stderr_data(str![""])
         .run();
 }
 
@@ -2655,9 +2641,6 @@ fn fix_in_rust_src() {
         .with_status(0)
         .with_stderr_data(str![[r#"
 [CHECKING] foo v0.0.0
-[FIXED] [..] ([..] fixes)
-error[E0308]: mismatched types
-...
 
 "#]])
         .run();
@@ -3305,14 +3288,10 @@ For more information, try '--help'.
     p.cargo_("fix -Zfix-edition=start=2024 -p e2024")
         .masquerade_as_nightly_cargo(&["fix-edition"])
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '-p' found
-
-Usage: cargo fixit [OPTIONS]
-
-For more information, try '--help'.
+[ERROR] no VCS found for this package and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-no-vcs`
 
 "#]])
-        .with_status(2)
+        .with_status(1)
         .run();
 }
 
