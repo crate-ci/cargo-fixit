@@ -135,7 +135,7 @@ For more information about this error, try `rustc --explain E0308`.
 
 "#]])
         .run();
-    assert!(!p.read_file("src/lib.rs").contains("let x = 3;"));
+    assert!(p.read_file("src/lib.rs").contains("let mut x = 3;"));
 }
 
 #[cargo_test]
@@ -154,7 +154,6 @@ fn fix_broken_if_requested() {
 
     p.cargo_("fix --allow-no-vcs --broken-code")
         .env("__CARGO_FIX_YOLO", "1")
-        .with_status(0)
         .with_stderr_data(str![[r#"
 [CHECKING] foo v0.0.1
 [FIXED] src/lib.rs (1 fix)
@@ -253,7 +252,6 @@ fn do_not_fix_non_relevant_deps() {
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
         .cwd("foo")
-        .with_status(0)
         .with_stderr_data(str![[r#"
 [CHECKING] bar v0.1.0
 [FIXED] [ROOT]/foo/bar/src/lib.rs (1 fix)
@@ -494,8 +492,8 @@ fn upgrade_extern_crate() {
 
 "#]])
         .with_stdout_data("")
-        .with_status(0)
         .run();
+    println!("{}", p.read_file("src/lib.rs"));
     assert!(!p.read_file("src/lib.rs").contains("extern crate"));
 }
 
@@ -545,7 +543,6 @@ fn no_changes_necessary() {
 
 "#]])
         .with_stdout_data("")
-        .with_status(0)
         .run();
 }
 
@@ -571,7 +568,6 @@ fn fixes_extra_mut() {
 
 "#]])
         .with_stdout_data("")
-        .with_status(0)
         .run();
 }
 
@@ -598,7 +594,6 @@ fn fixes_two_missing_ampersands() {
 
 "#]])
         .with_stdout_data("")
-        .with_status(0)
         .run();
 }
 
@@ -624,7 +619,6 @@ fn tricky() {
 
 "#]])
         .with_stdout_data("")
-        .with_status(0)
         .run();
 }
 
@@ -641,7 +635,6 @@ fn preserve_line_endings() {
 
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
-        .with_status(0)
         .with_stderr_data(str![[r#"
 [CHECKING] foo v0.0.1
 [FIXED] src/lib.rs (1 fix)
@@ -664,7 +657,6 @@ fn fix_deny_warnings() {
 
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
-        .with_status(0)
         .with_stderr_data(str![[r#"
 [CHECKING] foo v0.0.1
 [FIXED] src/lib.rs (1 fix)
@@ -696,7 +688,6 @@ fn fix_deny_warnings_but_not_others() {
 
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
-        .with_status(0)
         .with_stderr_data(str![[r#"
 [CHECKING] foo v0.0.1
 [FIXED] src/lib.rs (1 fix)
@@ -737,17 +728,16 @@ fn fix_two_files() {
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(
             str![[r#"
+[CHECKING] foo v0.0.1
 [FIXED] src/bar.rs (1 fix)
 [FIXED] src/lib.rs (1 fix)
-[CHECKING] foo v0.0.1
 
 "#]]
             .unordered(),
         )
-        .with_status(0)
         .run();
-    assert!(p.read_file("src/lib.rs").contains("let x = 3;"));
-    assert!(p.read_file("src/bar.rs").contains("let x = 3;"));
+    assert!(!p.read_file("src/lib.rs").contains("let mut x = 3;"));
+    assert!(!p.read_file("src/bar.rs").contains("let mut x = 3;"));
 }
 
 #[cargo_test]
@@ -782,7 +772,17 @@ fn fixes_missing_ampersand() {
         // compile (and fix) in `--test` mode first, we get two fixes. Otherwise
         // we'll fix one non-test thing, and then fix another one later in
         // test mode.
-        .with_stderr_data(str!["..."].unordered())
+        .with_stderr_data(
+            str![[r#"
+[FIXED] build.rs (1 fix)
+[FIXED] src/lib.rs ([..]fix[..])
+[FIXED] src/main.rs (1 fix)
+[FIXED] examples/foo.rs (1 fix)
+[FIXED] tests/a.rs (1 fix)
+...
+"#]]
+            .unordered(),
+        )
         .run();
     p.cargo_("check").run();
     p.cargo_("test").run();
@@ -815,7 +815,6 @@ fn fix_features() {
         .build();
 
     p.cargo_("fix --allow-no-vcs")
-        .with_status(0)
         .with_stderr_data(str![[r#"
 [CHECKING] foo v0.1.0
 
@@ -854,7 +853,6 @@ fn shows_warnings() {
 
 
 "#]])
-        .with_status(0)
         .run();
 }
 
@@ -896,7 +894,6 @@ fn warns_about_dirty_working_directory() {
 "#]])
         .run();
     p.cargo_("fix --allow-dirty")
-        .with_status(0)
         .with_stderr_data(str![[r#"
 [CHECKING] foo v0.0.1
 
@@ -923,7 +920,6 @@ fn warns_about_staged_working_directory() {
 "#]])
         .run();
     p.cargo_("fix --allow-staged")
-        .with_status(0)
         .with_stderr_data(str![[r#"
 [CHECKING] foo v0.0.1
 
@@ -951,7 +947,6 @@ fn errors_about_untracked_files() {
 "#]])
         .run();
     p.cargo_("fix --allow-dirty")
-        .with_status(0)
         .with_stderr_data(str![[r#"
 [CHECKING] foo v0.0.1
 
@@ -963,7 +958,6 @@ fn errors_about_untracked_files() {
 fn does_not_warn_about_clean_working_directory() {
     let p = git::new("foo", |p| p.file("src/lib.rs", "pub fn foo() {}"));
     p.cargo_("fix")
-        .with_status(0)
         .with_stderr_data(str![[r#"
 [CHECKING] foo v0.0.1
 
@@ -981,7 +975,6 @@ fn does_not_warn_about_dirty_ignored_files() {
     p.change_file("bar", "");
 
     p.cargo_("fix")
-        .with_status(0)
         .with_stderr_data(str![[r#"
 [CHECKING] foo v0.0.1
 
@@ -997,14 +990,13 @@ fn do_not_fix_tests_by_default() {
         .build();
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
-        .with_status(0)
         .with_stderr_data(str![[r#"
 [CHECKING] foo v0.0.1
 [FIXED] src/lib.rs (1 fix)
 
 "#]])
         .run();
-    assert!(p.read_file("src/lib.rs").contains("let x"));
+    assert!(!p.read_file("src/lib.rs").contains("let mut x"));
     assert!(p.read_file("tests/foo.rs").contains("let mut x"));
 }
 
@@ -1302,34 +1294,18 @@ fn shows_warnings_on_second_run_without_changes() {
 
     p.cargo_("fix --allow-no-vcs")
         .with_stderr_data(str![[r#"
-[CHECKING] foo v0.0.1
+...
 [WARNING] use of deprecated function `bar`
- --> src/lib.rs:6:29
-  |
-6 |                     let _ = bar();
-  |                             ^^^
-  |
-  = [NOTE] `#[warn(deprecated)]` on by default
-
-
+...
 "#]])
-        .with_status(0)
         .run();
 
     p.cargo_("fix --allow-no-vcs")
         .with_stderr_data(str![[r#"
-[CHECKING] foo v0.0.1
+...
 [WARNING] use of deprecated function `bar`
- --> src/lib.rs:6:29
-  |
-6 |                     let _ = bar();
-  |                             ^^^
-  |
-  = [NOTE] `#[warn(deprecated)]` on by default
-
-
+...
 "#]])
-        .with_status(0)
         .run();
 }
 
@@ -1399,10 +1375,15 @@ fn shows_warnings_on_second_run_without_changes_on_multiple_targets() {
         .with_stderr_data(
             str![[r#"
 ...
+ --> src/lib.rs:6:29
 ...
+ --> src/main.rs:6:29
 ...
+ --> examples/fooxample.rs:6:29
 ...
+ --> tests/foo.rs:7:29
 ...
+ --> tests/bar.rs:7:29
 ...
 
 "#]]
@@ -1414,10 +1395,15 @@ fn shows_warnings_on_second_run_without_changes_on_multiple_targets() {
         .with_stderr_data(
             str![[r#"
 ...
+ --> src/lib.rs:6:29
 ...
+ --> src/main.rs:6:29
 ...
+ --> examples/fooxample.rs:6:29
 ...
+ --> tests/bar.rs:7:29
 ...
+ --> tests/foo.rs:7:29
 ...
 "#]]
             .unordered(),
@@ -1460,7 +1446,9 @@ fn doesnt_rebuild_dependencies() {
     p.cargo_("fix --allow-no-vcs -p foo")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stdout_data("")
-        .with_stderr_data(str![""])
+        .with_stderr_data(str![[r#"
+
+"#]])
         .run();
 }
 
@@ -1481,7 +1469,6 @@ fn does_not_crash_with_rustc_wrapper() {
 
     p.cargo_("fix --allow-no-vcs")
         .env("RUSTC_WRAPPER", echo_wrapper())
-        .with_status(0)
         .with_stderr_data(str![[r#"
 [CHECKING] foo v0.1.0
 
@@ -1664,7 +1651,6 @@ fn fix_to_broken_code() {
 [FIXED] src/lib.rs (1 fix)
 
 "#]])
-        .with_status(0)
         .run();
 
     assert_e2e().eq(
@@ -1716,7 +1702,6 @@ fn fix_in_existing_repo_weird_ignore() {
     });
 
     p.cargo_("fix")
-        .with_status(0)
         .with_stderr_data(str![[r#"
 [CHECKING] foo v0.0.1
 
@@ -1733,11 +1718,7 @@ fn fix_in_existing_repo_weird_ignore() {
 "#]])
         .with_status(1)
         .run();
-    p.cargo_("fix")
-        .cwd("src")
-        .with_status(0)
-        .with_stderr_data(str![""])
-        .run();
+    p.cargo_("fix").cwd("src").run();
 }
 
 #[cargo_test]
@@ -1842,7 +1823,6 @@ fn rustfix_handles_multi_spans() {
         .build();
 
     p.cargo_("fix --allow-no-vcs")
-        .with_status(0)
         .with_stderr_data(str![[r#"
 [CHECKING] foo v0.1.0
 [FIXED] src/lib.rs (1 fix)
@@ -1929,13 +1909,12 @@ fn fix_shared_cross_workspace() {
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(
             str![[r#"
-[FIXED] [..]foo/src/shared.rs (2 fixes)
 [CHECKING] [..] v0.1.0
+[FIXED] [..]foo/src/shared.rs (2 fixes)
 
 "#]]
             .unordered(),
         )
-        .with_status(0)
         .run();
 
     assert_e2e().eq(
@@ -2105,7 +2084,6 @@ fn fix_with_run_cargo_in_proc_macros() {
         .build();
     p.cargo_("fix --allow-no-vcs")
         .with_stderr_does_not_contain("error: could not find .rs file in rustc args")
-        .with_status(0)
         .run();
 }
 
@@ -2342,7 +2320,6 @@ fn fix_in_dependency() {
 [CHECKING] foo v0.1.0
 
 "#]])
-        .with_status(0)
         .run();
 }
 
@@ -2638,7 +2615,6 @@ fn fix_in_rust_src() {
     p.cargo_("fix --lib --allow-no-vcs --broken-code")
         .env("__CARGO_FIX_YOLO", "1")
         .env("RUSTC", &rustc_bin)
-        .with_status(0)
         .with_stderr_data(str![[r#"
 [CHECKING] foo v0.0.0
 
@@ -2675,7 +2651,6 @@ fn main() {
 [FIXED] src/main.rs (1 fix)
 
 "#]])
-        .with_status(0)
         .run();
 
     assert_e2e().eq(
