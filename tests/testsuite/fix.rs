@@ -2317,6 +2317,14 @@ fn fix_in_dependency() {
         .with_stderr_data(str![[r#"
 [CHECKING] bar v1.0.0
 [CHECKING] foo v0.1.0
+[WARNING] unused variable: `abc`
+ --> [ROOT]/home/.cargo/registry/src/-[HASH]/bar-1.0.0/src/lib.rs:5:29
+  |
+5 |                         let $i = 1;
+  |                             ^^ [HELP] if this is intentional, prefix it with an underscore: `_abc`
+  |
+  = [NOTE] `#[warn(unused_variables)]` on by default
+
 
 "#]])
         .run();
