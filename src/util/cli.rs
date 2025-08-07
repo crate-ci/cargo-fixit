@@ -3,7 +3,7 @@ use clap::Parser;
 #[derive(Debug, Parser)]
 pub struct CheckFlags {
     /// Package(s) to fix
-    #[arg(long, value_name = "SPEC", help_heading = "Package Selection")]
+    #[arg(short, long, value_name = "SPEC", help_heading = "Package Selection")]
     package: Vec<String>,
 
     /// Fix all packages in the workspace
