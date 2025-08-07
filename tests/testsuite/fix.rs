@@ -868,7 +868,6 @@ fn warns_if_no_vcs_detected() {
 "#]])
         .run();
     p.cargo_("fix --allow-no-vcs")
-        .with_status(0)
         .with_stderr_data(str![[r#"
 [CHECKING] foo v0.0.1
 
