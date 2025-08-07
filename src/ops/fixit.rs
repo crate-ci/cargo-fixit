@@ -15,7 +15,10 @@ use tracing::{trace, warn};
 use crate::{
     core::{shell, sysroot::get_sysroot},
     ops::check::{BuildUnit, CheckOutput, Message},
-    util::{cli::CheckFlags, package::format_package_id, vcs::VcsOpts},
+    util::{
+        cli::CheckFlags, messages::gen_please_report_this_bug_text, package::format_package_id,
+        vcs::VcsOpts,
+    },
     CargoResult,
 };
 
@@ -24,6 +27,10 @@ pub struct FixitArgs {
     /// Run `clippy` instead of `check`
     #[arg(long)]
     clippy: bool,
+
+    /// Fix code even if it already has compiler errors
+    #[arg(long)]
+    broken_code: bool,
 
     #[command(flatten)]
     vcs_opts: VcsOpts,
@@ -41,6 +48,7 @@ impl FixitArgs {
 #[derive(Debug, Default)]
 struct File {
     fixes: u32,
+    original_source: String,
 }
 
 #[tracing::instrument(skip_all)]
@@ -62,7 +70,77 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
     loop {
         trace!("iteration={iteration}");
         trace!("current_target={current_target:?}");
-        let (messages, _exit_code) = check(&args)?;
+        let (messages, exit_code) = check(&args)?;
+
+        if !args.broken_code && exit_code != Some(0) {
+            let mut out = String::new();
+
+            if current_target.is_some() {
+                out.push_str(
+                    "failed to automatically apply fixes suggested by rustc\n\n\
+                    after fixes were automatically applied the \
+                    compiler reported errors within these files:\n\n",
+                );
+
+                for (
+                    file,
+                    File {
+                        fixes: _,
+                        original_source,
+                    },
+                ) in &files
+                {
+                    out.push_str(&format!("  * {file}\n"));
+                    shell::note(format!("reverting `{file}` to its original state"))?;
+                    paths::write(file, original_source)?;
+                }
+                out.push('\n');
+
+                out.push_str(&gen_please_report_this_bug_text(args.clippy));
+
+                let mut errors = messages
+                    .filter_map(|e| match e {
+                        CheckOutput::Message(m) => m.message.rendered,
+                        _ => None,
+                    })
+                    .peekable();
+                if errors.peek().is_some() {
+                    out.push_str("The errors reported are:\n");
+                }
+
+                for e in errors {
+                    out.push_str(&format!("{}\n\n", e.trim_end()));
+                }
+
+                let (messages, _) = check(&args)?;
+                let mut errors = messages
+                    .filter_map(|e| match e {
+                        CheckOutput::Message(m) => m.message.rendered,
+                        _ => None,
+                    })
+                    .peekable();
+
+                if errors.peek().is_some() {
+                    out.push_str("The original errors are:\n");
+                }
+
+                for e in errors {
+                    out.push_str(&format!("{}\n\n", e.trim_end()));
+                }
+
+                shell::warn(out)?;
+            } else {
+                for e in messages.filter_map(|e| match e {
+                    CheckOutput::Message(m) => m.message.rendered,
+                    _ => None,
+                }) {
+                    shell::print_ansi_stderr(format!("{}\n\n", e.trim_end()).as_bytes())?;
+                }
+            }
+
+            shell::note("try using `--broken-code` to fix errors")?;
+            anyhow::bail!("could not compile");
+        }
 
         let (mut errors, build_unit_map) = collect_errors(messages, &seen);
 
@@ -302,7 +380,7 @@ fn fix_errors(
 ) -> CargoResult<bool> {
     let mut made_changes = false;
     for (file, suggestions) in file_map {
-        let code = match paths::read(file.as_ref()) {
+        let source = match paths::read(file.as_ref()) {
             Ok(s) => s,
             Err(e) => {
                 warn!("failed to read `{}`: {}", file, e);
@@ -311,7 +389,7 @@ fn fix_errors(
             }
         };
 
-        let mut fixed = CodeFix::new(&code);
+        let mut fixed = CodeFix::new(&source);
         let mut num_fixes = 0;
 
         for (suggestion, rendered) in suggestions.iter().rev() {
@@ -329,10 +407,16 @@ fn fix_errors(
             }
         }
         if fixed.modified() {
-            let new_code = fixed.finish()?;
-            paths::write(&file, new_code)?;
+            let new_source = fixed.finish()?;
+            paths::write(&file, new_source)?;
             made_changes = true;
-            files.entry(file).or_default().fixes += num_fixes;
+            files
+                .entry(file)
+                .or_insert(File {
+                    fixes: 0,
+                    original_source: source,
+                })
+                .fixes += num_fixes;
         }
     }
 
