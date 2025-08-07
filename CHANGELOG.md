@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Features
+
+- Support `--broken-code`
+
+### Fixes
+
+- Ensure standard library is not fixed
+
 ## [0.1.4] - 2025-08-04
 
 ### Fixes
