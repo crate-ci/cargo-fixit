@@ -12,7 +12,7 @@ fn main() {
     if let Err(err) = args.exec() {
         shell::error(&err).unwrap();
 
-        std::process::exit(1);
+        std::process::exit(101);
     }
 }
 
