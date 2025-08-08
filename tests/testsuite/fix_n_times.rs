@@ -415,7 +415,7 @@ rustc fix shim error count=2
 
 "#]],
         "// fix-count 0",
-        1,
+        101,
     );
 }
 
@@ -455,7 +455,7 @@ rustc fix shim error count=2
 
 "#]],
         "// fix-count 0",
-        1,
+        101,
     );
 }
 
@@ -490,7 +490,7 @@ rustc fix shim error count=1
 
 "#]],
         "// fix-count 0",
-        1,
+        101,
     );
 }
 

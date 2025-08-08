@@ -108,7 +108,7 @@ fn do_not_fix_broken_builds() {
 
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
-        .with_status(1)
+        .with_status(101)
         .with_stderr_data(str![[r#"
 error[E0308]: mismatched types
  --> src/lib.rs:8:35
@@ -861,7 +861,7 @@ fn warns_if_no_vcs_detected() {
     let p = project().file("src/lib.rs", "pub fn foo() {}").build();
 
     p.cargo_("fix")
-        .with_status(1)
+        .with_status(101)
         .with_stderr_data(str![[r#"
 [ERROR] no VCS found for this package and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-no-vcs`
 
@@ -882,7 +882,7 @@ fn warns_about_dirty_working_directory() {
     p.change_file("src/lib.rs", "");
 
     p.cargo_("fix")
-        .with_status(1)
+        .with_status(101)
         .with_stderr_data(str![[r#"
 [ERROR] the working directory of this package has uncommitted changes, and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-dirty`, or commit the changes to these files:
 
@@ -908,7 +908,7 @@ fn warns_about_staged_working_directory() {
     git::add(&repo);
 
     p.cargo_("fix")
-        .with_status(1)
+        .with_status(101)
         .with_stderr_data(str![[r#"
 [ERROR] the working directory of this package has uncommitted changes, and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-dirty`, or commit the changes to these files:
 
@@ -934,7 +934,7 @@ fn errors_about_untracked_files() {
     let _ = init(&p.root());
 
     p.cargo_("fix")
-        .with_status(1)
+        .with_status(101)
         .with_stderr_data(str![[r#"
 [ERROR] the working directory of this package has uncommitted changes, and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-dirty`, or commit the changes to these files:
 
@@ -1715,7 +1715,7 @@ fn fix_in_existing_repo_weird_ignore() {
 [ERROR] no VCS found for this package and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-no-vcs`
 
 "#]])
-        .with_status(1)
+        .with_status(101)
         .run();
     p.cargo_("fix").cwd("src").run();
 }
@@ -2034,7 +2034,7 @@ The original errors are:
 [ERROR] could not compile
 
 "#]])
-        .with_status(1)
+        .with_status(101)
         .run();
 }
 
@@ -3301,7 +3301,7 @@ For more information, try '--help'.
 [ERROR] no VCS found for this package and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-no-vcs`
 
 "#]])
-        .with_status(1)
+        .with_status(101)
         .run();
 }
 
@@ -3325,7 +3325,7 @@ fn fix_edition_future() {
 [ERROR] no VCS found for this package and `cargo fix` can potentially perform destructive changes; if you'd like to suppress this error pass `--allow-no-vcs`
 
 "#]])
-        .with_status(1)
+        .with_status(101)
         .run();
     assert_e2e().eq(
         p.read_file("Cargo.toml"),
