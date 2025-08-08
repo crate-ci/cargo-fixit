@@ -1728,21 +1728,24 @@ fn fix_color_message() {
         .build();
 
     p.cargo_("fix --allow-no-vcs --color=always")
-        .with_stderr_does_not_contain("[..]\x1b[[..]")
-        .with_status(2)
+        .with_stderr_data(
+            "\
+...
+[..]\x1b[[..]
+...
+",
+        )
+        .with_status(101)
         .run();
 
     p.cargo_("fix --allow-no-vcs --color=never")
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--color' found
-
-Usage: cargo fixit --allow-no-vcs
-
-For more information, try '--help'.
-
+...
+[ERROR] color test
+...
 "#]])
         .with_stderr_does_not_contain("[..]\x1b[[..]")
-        .with_status(2)
+        .with_status(101)
         .run();
 }
 
