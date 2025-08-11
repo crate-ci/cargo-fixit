@@ -33,6 +33,9 @@ pub struct FixitArgs {
     broken_code: bool,
 
     #[command(flatten)]
+    color: colorchoice_clap::Color,
+
+    #[command(flatten)]
     vcs_opts: VcsOpts,
 
     #[command(flatten)]
@@ -53,6 +56,8 @@ struct File {
 
 #[tracing::instrument(skip_all)]
 fn exec(args: FixitArgs) -> CargoResult<()> {
+    args.color.write_global();
+
     args.vcs_opts.valid_vcs()?;
 
     let mut files: IndexMap<String, File> = IndexMap::new();
