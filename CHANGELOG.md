@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Features
+
+- `--color` control
+
+### Fixes
+
+- Improve `RUSTFLAGS` handling
+- Correct the exit code to match cargo
+
 ## [0.1.6] - 2025-08-07
 
 ### Features
