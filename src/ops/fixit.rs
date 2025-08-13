@@ -260,7 +260,13 @@ fn check(args: &FixitArgs) -> CargoResult<(impl Iterator<Item = CheckOutput>, Op
         .args([cmd, "--message-format", "json-diagnostic-rendered-ansi"])
         .args(args.check_flags.to_flags())
         // This allows `cargo fix` to work even if the crate has #[deny(warnings)].
-        .env("RUSTFLAGS", "--cap-lints=warn")
+        .env(
+            "RUSTFLAGS",
+            format!(
+                "--cap-lints=warn {}",
+                env::var("RUSTFLAGS").unwrap_or("".to_owned())
+            ),
+        )
         .stderr(Stdio::piped())
         .stdout(Stdio::piped())
         .output()?;
