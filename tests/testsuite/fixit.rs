@@ -66,7 +66,7 @@ fn fixable_and_unfixable() {
 6 |                 let c = 10;
   |                     ^ [HELP] if this is intentional, prefix it with an underscore: `_c`
   |
-  = [NOTE] `#[warn(unused_variables)]` on by default
+  = [NOTE] `#[warn(unused_variables)]` [..]on by default
 
 
 "#]])
@@ -203,7 +203,7 @@ fn print_errors_after_fixed() {
 1 |  fn bar() {}
   |     ^^^
   |
-  = [NOTE] `#[warn(dead_code)]` on by default
+  = [NOTE] `#[warn(dead_code)]` [..]on by default
 
 [CHECKING] a v0.1.0
 [FIXED] a/src/lib.rs (1 fix)
@@ -213,7 +213,7 @@ fn print_errors_after_fixed() {
 1 |  fn bar() {}
   |     ^^^
   |
-  = [NOTE] `#[warn(dead_code)]` on by default
+  = [NOTE] `#[warn(dead_code)]` [..]on by default
 
 
 "#]])

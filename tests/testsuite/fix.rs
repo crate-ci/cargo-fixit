@@ -1,5 +1,5 @@
 //! Tests for the `cargo fix` command.
-//! <https://github.com/rust-lang/cargo/blob/930b4f62cfcd1f0eabdb30a56d91bf6844b739bf/tests/testsuite/fix.rs>
+//! <https://github.com/rust-lang/cargo/blob/12fa1daac8e5c05578c673f50a622bfd52859d01/tests/testsuite/fix.rs>
 
 use std::env;
 use std::path::{Path, PathBuf};
@@ -126,7 +126,7 @@ error[E0308]: mismatched types
   |                         |
   |                         [HELP] remove this `mut`
   |
-  = [NOTE] `#[warn(unused_mut)]` on by default
+  = [NOTE] `#[warn(unused_mut)]` [..]on by default
 
 For more information about this error, try `rustc --explain E0308`.
 
@@ -2020,7 +2020,7 @@ The original errors are:
 3 |                     let mut x = 1;
   |                             ^ [HELP] if this is intentional, prefix it with an underscore: `_x`
   |
-  = [NOTE] `#[warn(unused_variables)]` on by default
+  = [NOTE] `#[warn(unused_variables)]` [..]on by default
 
 [WARNING] variable does not need to be mutable
  --> src/lib.rs:3:25
@@ -2030,7 +2030,7 @@ The original errors are:
   |                         |
   |                         [HELP] remove this `mut`
   |
-  = [NOTE] `#[warn(unused_mut)]` on by default
+  = [NOTE] `#[warn(unused_mut)]` [..]on by default
 
 
 [NOTE] try using `--broken-code` to fix errors
