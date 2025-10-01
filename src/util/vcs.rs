@@ -96,9 +96,8 @@ impl VcsOpts {
             like to suppress this error pass `--allow-dirty`, \
             or commit the changes to these files:\n\
             \n\
-            {}\n\
-            ",
-            files_list
+            {files_list}\n\
+            "
         );
     }
 }

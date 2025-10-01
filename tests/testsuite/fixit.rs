@@ -1,4 +1,4 @@
-use cargo_test_macro::cargo_test;
+use cargo_test_support::cargo_test;
 use cargo_test_support::{basic_manifest, compare::assert_ui, project};
 use snapbox::str;
 
