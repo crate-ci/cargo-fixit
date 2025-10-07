@@ -78,6 +78,54 @@ pub struct CheckFlags {
     /// Unstable (nightly-only) flags
     #[arg(short = 'Z', value_name = "FLAG")]
     unstable_flags: Vec<String>,
+
+    /// Number of parallel jobs, defaults to # of CPUs.
+    #[arg(long, value_name = "N", help_heading = "Compilation Options")]
+    jobs: Option<usize>,
+
+    /// Fix artifacts in release mode, with optimizations
+    #[arg(long, help_heading = "Compilation Options")]
+    release: bool,
+
+    /// Build artifacts with the specified profile
+    #[arg(
+        long,
+        value_name = "PROFILE-NAME",
+        help_heading = "Compilation Options"
+    )]
+    profile: Option<String>,
+
+    /// Fix for the target triple
+    #[arg(long, value_name = "TRIPLE", help_heading = "Compilation Options")]
+    target: Vec<String>,
+
+    /// Directory for all generated artifacts
+    #[arg(long, value_name = "DIRECTORY", help_heading = "Compilation Options")]
+    target_dir: Option<String>,
+
+    /// Path to Cargo.toml
+    #[arg(long, value_name = "PATH", help_heading = "Manifest Options")]
+    manifest_path: Option<String>,
+
+    /// Path to Cargo.lock (unstable)
+    #[arg(long, value_name = "PATH", help_heading = "Manifest Options")]
+    lockfile_path: Option<String>,
+
+    /// Ignore `rust-version` specification in packages
+    #[arg(long, help_heading = "Manifest Options")]
+    ignore_rust_version: bool,
+
+    /// Assert that `Cargo.lock` will remain unchanged
+    #[arg(long, help_heading = "Manifest Options")]
+    locked: bool,
+
+    /// Run without accessing the network
+    #[arg(long, help_heading = "Manifest Options")]
+    offline: bool,
+
+    /// Equivalent to specifying both --locked and --offline
+    #[arg(long, help_heading = "Manifest Options")]
+    frozen: bool,
 }
 
 impl CheckFlags {
@@ -155,6 +203,47 @@ impl CheckFlags {
             out.push(i);
         }
 
+        if let Some(b) = self.jobs {
+            out.push("--jobs".to_owned());
+            out.push(b.to_string());
+        }
+        if self.release {
+            out.push("--release".to_owned());
+        }
+        if let Some(b) = self.profile.clone() {
+            out.push("--profile".to_owned());
+            out.push(b);
+        }
+
+        for spec in self.target.clone() {
+            out.push("--target".to_owned());
+            out.push(spec);
+        }
+        if let Some(b) = self.target_dir.clone() {
+            out.push("--target-dir".to_owned());
+            out.push(b);
+        }
+
+        if let Some(b) = self.manifest_path.clone() {
+            out.push("--manifest-path".to_owned());
+            out.push(b);
+        }
+        if let Some(b) = self.lockfile_path.clone() {
+            out.push("--lockfile-path".to_owned());
+            out.push(b);
+        }
+        if self.ignore_rust_version {
+            out.push("--ignore-rust-version".to_owned());
+        }
+        if self.locked {
+            out.push("--locked".to_owned());
+        }
+        if self.offline {
+            out.push("--offline".to_owned());
+        }
+        if self.frozen {
+            out.push("--frozen".to_owned());
+        }
         out
     }
 }
