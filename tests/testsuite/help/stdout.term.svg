@@ -1,7 +1,7 @@
-<svg width="886px" height="704px" xmlns="http://www.w3.org/2000/svg">
+<svg width="886px" height="974px" xmlns="http://www.w3.org/2000/svg">
   <style>
     .fg { fill: #AAAAAA }
-    .bg { background: #000000 }
+    .bg { fill: #000000 }
     .container {
       padding: 0 10px;
       line-height: 18px;
@@ -91,6 +91,36 @@
     <tspan x="10px" y="676px"><tspan>      --no-default-features  Do not activate the `default` feature</tspan>
 </tspan>
     <tspan x="10px" y="694px">
+</tspan>
+    <tspan x="10px" y="712px"><tspan>Compilation Options:</tspan>
+</tspan>
+    <tspan x="10px" y="730px"><tspan>      --jobs &lt;N&gt;                Number of parallel jobs, defaults to # of CPUs</tspan>
+</tspan>
+    <tspan x="10px" y="748px"><tspan>      --release                 Fix artifacts in release mode, with optimizations</tspan>
+</tspan>
+    <tspan x="10px" y="766px"><tspan>      --profile &lt;PROFILE-NAME&gt;  Build artifacts with the specified profile</tspan>
+</tspan>
+    <tspan x="10px" y="784px"><tspan>      --target &lt;TRIPLE&gt;         Fix for the target triple</tspan>
+</tspan>
+    <tspan x="10px" y="802px"><tspan>      --target-dir &lt;DIRECTORY&gt;  Directory for all generated artifacts</tspan>
+</tspan>
+    <tspan x="10px" y="820px">
+</tspan>
+    <tspan x="10px" y="838px"><tspan>Manifest Options:</tspan>
+</tspan>
+    <tspan x="10px" y="856px"><tspan>      --manifest-path &lt;PATH&gt;  Path to Cargo.toml</tspan>
+</tspan>
+    <tspan x="10px" y="874px"><tspan>      --lockfile-path &lt;PATH&gt;  Path to Cargo.lock (unstable)</tspan>
+</tspan>
+    <tspan x="10px" y="892px"><tspan>      --ignore-rust-version   Ignore `rust-version` specification in packages</tspan>
+</tspan>
+    <tspan x="10px" y="910px"><tspan>      --locked                Assert that `Cargo.lock` will remain unchanged</tspan>
+</tspan>
+    <tspan x="10px" y="928px"><tspan>      --offline               Run without accessing the network</tspan>
+</tspan>
+    <tspan x="10px" y="946px"><tspan>      --frozen                Equivalent to specifying both --locked and --offline</tspan>
+</tspan>
+    <tspan x="10px" y="964px">
 </tspan>
   </text>
 
