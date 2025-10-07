@@ -1,3 +1,5 @@
+use std::hash::Hash;
+
 use rustfix::diagnostics::Diagnostic;
 use serde::Deserialize;
 
@@ -41,22 +43,65 @@ pub struct Target {
     test: bool,
 }
 
-#[derive(Deserialize, Hash, PartialEq, Clone, Eq, Debug)]
+#[derive(Deserialize, Eq, Clone, Debug)]
 #[serde(rename_all(deserialize = "kebab-case"))]
 pub enum Kind {
-    Bin,
-    Example,
-    Test,
-    Bench,
     CustomBuild,
+    #[serde(untagged)]
+    Lib(LibKind),
+    #[serde(untagged)]
+    Bin(BinKind),
+    #[serde(untagged)]
+    Other(String),
+}
+
+impl PartialEq for Kind {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Kind::Other(a), Kind::Other(b)) => a == b,
+            _ => std::mem::discriminant(self) == std::mem::discriminant(other),
+        }
+    }
+}
+
+impl Hash for Kind {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            Self::CustomBuild => state.write_u8(1),
+            Self::Lib(l) => {
+                state.write_u8(2);
+                l.hash(state);
+            }
+            Self::Bin(b) => {
+                state.write_u8(3);
+                b.hash(state);
+            }
+            Self::Other(a) => {
+                state.write_u8(4);
+                a.hash(state);
+            }
+        };
+    }
+}
+
+#[derive(Deserialize, Hash, PartialEq, Clone, Eq, Debug)]
+#[serde(rename_all(deserialize = "kebab-case"))]
+pub enum LibKind {
     Lib,
     Rlib,
     Dylib,
     Cdylib,
     Staticlib,
     ProcMacro,
-    #[serde(untagged)]
-    Other(String),
+}
+
+#[derive(Deserialize, Hash, PartialEq, Clone, Eq, Debug)]
+#[serde(rename_all(deserialize = "kebab-case"))]
+pub enum BinKind {
+    Bin,
+    Example,
+    Test,
+    Bench,
 }
 
 #[derive(Deserialize, Hash, PartialEq, Clone, Eq, Debug)]

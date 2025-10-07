@@ -69,7 +69,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
     let mut iteration = 0;
 
     let mut last_errors = IndexMap::new();
-    let mut current_target: Option<BuildUnit> = None;
+    let mut current_target: IndexSet<BuildUnit> = IndexSet::new();
     let mut seen = HashSet::new();
 
     loop {
@@ -80,7 +80,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
         if !args.broken_code && exit_code != Some(0) {
             let mut out = String::new();
 
-            if current_target.is_some() {
+            if !current_target.is_empty() {
                 out.push_str(
                     "failed to automatically apply fixes suggested by rustc\n\n\
                     after fixes were automatically applied the \
@@ -150,7 +150,10 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
         let (mut errors, build_unit_map) = collect_errors(messages, &seen);
 
         if iteration >= max_iterations {
-            if let Some(target) = current_target {
+            if current_target.is_empty() {
+                break;
+            }
+            for target in &current_target {
                 if seen.iter().all(|b| b.package_id != target.package_id) {
                     shell::status("Checking", format_package_id(&target.package_id)?)?;
                 }
@@ -160,9 +163,9 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
                 }
                 files = IndexMap::new();
 
-                let mut errors = errors.shift_remove(&target).unwrap_or_else(IndexSet::new);
+                let mut errors = errors.shift_remove(target).unwrap_or_else(IndexSet::new);
 
-                if let Some(e) = build_unit_map.get(&target) {
+                if let Some(e) = build_unit_map.get(target) {
                     for (_, e) in e.iter().flat_map(|(_, s)| s) {
                         let Some(e) = e else {
                             continue;
@@ -174,26 +177,26 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
                     shell::print_ansi_stderr(format!("{}\n\n", e.trim_end()).as_bytes())?;
                 }
 
-                seen.insert(target);
-                current_target = None;
-                iteration = 0;
-            } else {
-                break;
+                seen.insert(target.clone());
             }
+            iteration = 0;
+            current_target = IndexSet::new();
         }
 
-        let mut made_changes = false;
+        let mut made_changes = HashSet::new();
 
         for (build_unit, file_map) in build_unit_map {
             if seen.contains(&build_unit) {
                 continue;
             }
 
+            let same = current_target.iter().any(|b| b == &build_unit);
+
             let build_unit_errors = errors
                 .entry(build_unit.clone())
                 .or_insert_with(IndexSet::new);
 
-            if current_target.is_none() && file_map.is_empty() {
+            if current_target.is_empty() && file_map.is_empty() {
                 if seen.iter().all(|b| b.package_id != build_unit.package_id) {
                     shell::status("Checking", format_package_id(&build_unit.package_id)?)?;
                 }
@@ -204,11 +207,11 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
 
                 seen.insert(build_unit);
             } else if !file_map.is_empty()
-                && current_target.get_or_insert(build_unit.clone()) == &build_unit
+                && (same || current_target.is_empty())
                 && fix_errors(&mut files, file_map, build_unit_errors)?
             {
-                made_changes = true;
-                break;
+                current_target.insert(build_unit.clone());
+                made_changes.insert(build_unit);
             }
         }
 
@@ -218,8 +221,12 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
         last_errors = errors;
         iteration += 1;
 
-        if !made_changes {
-            if let Some(pkg) = current_target {
+        if made_changes.is_empty() {
+            if current_target.is_empty() {
+                break;
+            }
+
+            for pkg in current_target {
                 if seen.iter().all(|b| b.package_id != pkg.package_id) {
                     shell::status("Checking", format_package_id(&pkg.package_id)?)?;
                 }
@@ -235,11 +242,9 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
                 }
 
                 seen.insert(pkg);
-                current_target = None;
-                iteration = 0;
-            } else {
-                break;
             }
+            iteration = 0;
+            current_target = IndexSet::new();
         }
     }
 
