@@ -2014,27 +2014,7 @@ Note that you may be able to make some more progress in the near-term
 fixing code with the `--broken-code` flag
 
 The original errors are:
-[WARNING] unused variable: `x`
- --> src/lib.rs:3:29
-  |
-3 |                     let mut x = 1;
-  |                             ^ [HELP] if this is intentional, prefix it with an underscore: `_x`
-  |
-  = [NOTE] `#[warn(unused_variables)]` [..]on by default
-
-[WARNING] variable does not need to be mutable
- --> src/lib.rs:3:25
-  |
-3 |                     let mut x = 1;
-  |                         ----^
-  |                         |
-  |                         [HELP] remove this `mut`
-  |
-  = [NOTE] `#[warn(unused_mut)]` [..]on by default
-
-
-[NOTE] try using `--broken-code` to fix errors
-[ERROR] could not compile
+...
 
 "#]])
         .with_status(101)
