@@ -49,7 +49,9 @@ fn fixable_and_unfixable() {
                 let mut b = 10;
                 let _ = b;
 
-                let c = 10;
+                let mut c = 10;
+                let _ = c;
+                c = 1;
             }
             "#,
         )
@@ -60,13 +62,14 @@ fn fixable_and_unfixable() {
         .with_stderr_data(str![[r#"
 [CHECKING] foo v0.0.1
 [FIXED] src/lib.rs (1 fix)
-[WARNING] unused variable: `c`
- --> src/lib.rs:6:21
+[WARNING] value assigned to `c` is never read
+ --> src/lib.rs:8:17
   |
-6 |                 let c = 10;
-  |                     ^ [HELP] if this is intentional, prefix it with an underscore: `_c`
+8 |                 c = 1;
+  |                 ^^^^^
   |
-  = [NOTE] `#[warn(unused_variables)]` [..]on by default
+  = [HELP] maybe it is overwritten before being read?
+  = [NOTE] `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
 
 
 "#]])
@@ -79,7 +82,9 @@ fn fixable_and_unfixable() {
                 let b = 10;
                 let _ = b;
 
-                let c = 10;
+                let mut c = 10;
+                let _ = c;
+                c = 1;
             }
             
 "#]],
