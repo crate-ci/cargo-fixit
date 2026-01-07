@@ -182,15 +182,15 @@ dependencies = [
 
 [[package]]
 name = "cargo-test-macro"
-version = "0.4.6"
+version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1eca6c2ab901225f12694b04965bbb199fc280ed16a2eba84b6038d7f570a27"
+checksum = "427a2d2e78183b3b91ef0294290f2c802bac5523b5377e6c162e5c70e9ec24f2"
 
 [[package]]
 name = "cargo-test-support"
-version = "0.8.1"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ac364115422eabd0cdd5b80523d52747497623636edf7315ea1fe3b3eee7b0c"
+checksum = "52a4dbe795a2e14934c4e8576af435e131352a3366f1e24d9ba56732baa3cbc1"
 dependencies = [
  "anstream",
  "anstyle",
@@ -213,14 +213,14 @@ dependencies = [
  "toml",
  "url",
  "walkdir",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.1",
 ]
 
 [[package]]
 name = "cargo-util"
-version = "0.2.24"
+version = "0.2.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f97c9ef0f8af69bfcecfe4c17a414d7bb978fe794bc1a38952e27b5c5d87492d"
+checksum = "03ae3fc62640c9e0235c95b07e68a59a31919d7331bd95961cc811bc0607c87b"
 dependencies = [
  "anyhow",
  "core-foundation",
@@ -236,7 +236,7 @@ dependencies = [
  "tempfile",
  "tracing",
  "walkdir",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.1",
 ]
 
 [[package]]
@@ -381,9 +381,9 @@ dependencies = [
 
 [[package]]
 name = "crates-io"
-version = "0.40.14"
+version = "0.40.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "574ce0b8170c097cf174097b84bff181956ad2ab2bbe092ab58d1c08d9f1f417"
+checksum = "62451b814867f57f25e941eeb22b55ada9d93308cb65578ec57e35e414091019"
 dependencies = [
  "curl",
  "percent-encoding",
