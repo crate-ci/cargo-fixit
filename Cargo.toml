@@ -138,7 +138,7 @@ indexmap = "2.11.4"
 anstream = "1.0.0"
 log = "0.4.28"
 git2 = "0.20.2"
-cargo-util-schemas = "0.10.0"
+cargo-util-schemas = "0.12.0"
 colorchoice-clap = "1.0.7"
 
 [dev-dependencies]
