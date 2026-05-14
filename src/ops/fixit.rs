@@ -256,7 +256,8 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
 
 fn check(args: &FixitArgs) -> CargoResult<(impl Iterator<Item = CheckOutput>, Option<i32>)> {
     let cmd = if args.clippy { "clippy" } else { "check" };
-    let command = std::process::Command::new(env!("CARGO"))
+    let cargo = env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+    let command = std::process::Command::new(cargo)
         .args([cmd, "--message-format", "json-diagnostic-rendered-ansi"])
         .args(args.check_flags.to_flags())
         // This allows `cargo fix` to work even if the crate has #[deny(warnings)].

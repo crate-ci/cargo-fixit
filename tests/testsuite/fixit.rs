@@ -1,5 +1,5 @@
 use cargo_test_support::cargo_test;
-use cargo_test_support::{basic_manifest, compare::assert_ui, project};
+use cargo_test_support::{basic_manifest, compare::assert_ui, paths, project};
 use snapbox::str;
 
 use crate::fix::FixitProject;
@@ -36,6 +36,41 @@ fn basic() {
             }
             
 "#]],
+    );
+}
+
+#[cargo_test]
+fn uses_runtime_cargo_env_var() {
+    let fake_cargo = project()
+        .at(paths::global_root().join("fake-cargo-for-fixit"))
+        .file("Cargo.toml", &basic_manifest("fake-cargo-for-fixit", "1.0.0"))
+        .file(
+            "src/main.rs",
+            r#"
+            fn main() {
+                let marker = std::env::var_os("CARGO_FIXIT_FAKE_CARGO_MARKER").unwrap();
+                let args = std::env::args().skip(1).collect::<Vec<_>>().join("\n");
+                std::fs::write(marker, args).unwrap();
+            }
+            "#,
+        )
+        .build();
+    fake_cargo.cargo_("build").run();
+
+    let marker = paths::root().join("fake-cargo-for-fixit-called");
+    let p = project().file("src/lib.rs", "pub fn a() {}").build();
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_cargo-fixit"))
+        .args(["fixit", "--allow-no-vcs"])
+        .current_dir(p.root())
+        .env("CARGO", fake_cargo.bin("fake-cargo-for-fixit"))
+        .env("CARGO_FIXIT_FAKE_CARGO_MARKER", &marker)
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    assert_eq!(
+        std::fs::read_to_string(marker).unwrap(),
+        "check\n--message-format\njson-diagnostic-rendered-ansi"
     );
 }
 
