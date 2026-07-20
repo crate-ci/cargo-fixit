@@ -198,7 +198,7 @@ dependencies = [
  "rustfix",
  "serde",
  "serde_json",
- "snapbox",
+ "snapbox 1.0.0",
  "tracing",
  "tracing-chrome",
  "tracing-subscriber",
@@ -231,7 +231,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
- "snapbox",
+ "snapbox 0.6.24",
  "tar",
  "time",
  "toml",
@@ -1606,14 +1606,32 @@ dependencies = [
  "content_inspector",
  "dunce",
  "filetime",
- "libc",
  "normalize-line-endings",
- "os_pipe",
  "regex",
  "serde",
  "serde_json",
  "similar",
- "snapbox-macros",
+ "snapbox-macros 0.4.0",
+ "tempfile",
+ "walkdir",
+]
+
+[[package]]
+name = "snapbox"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "71d70a71b68054cbe88708f77abfc4bd2daf75028f8f55f4f1cff63565df89ea"
+dependencies = [
+ "anstream 0.6.20",
+ "anstyle",
+ "content_inspector",
+ "dunce",
+ "filetime",
+ "libc",
+ "normalize-line-endings",
+ "os_pipe",
+ "similar",
+ "snapbox-macros 1.1.0",
  "tempfile",
  "wait-timeout",
  "walkdir",
@@ -1627,6 +1645,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b750c344002d7cc69afb9da00ebd9b5c0f8ac2eb7d115d9d45d5b5f47718d74"
 dependencies = [
  "anstream 0.6.20",
+]
+
+[[package]]
+name = "snapbox-macros"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed4a172e483585ebbc7c7f7d1705ca7e3f94f606ed78caa14805673189fd5455"
+dependencies = [
+ "anstream 1.0.0",
 ]
 
 [[package]]
