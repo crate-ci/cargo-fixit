@@ -282,13 +282,21 @@ fn check(args: &FixitArgs, lint_cap: &mut bool) -> CargoResult<(Vec<CheckOutput>
 
 /// Applies the original lint cap while preserving existing compiler flags.
 fn cap_lints(command: &mut std::process::Command) {
-    command.env(
-        "RUSTFLAGS",
-        format!(
-            "--cap-lints=warn {}",
-            env::var("RUSTFLAGS").unwrap_or("".to_owned())
-        ),
-    );
+    if let Ok(flags) = env::var("CARGO_ENCODED_RUSTFLAGS") {
+        let separator = if flags.is_empty() { "" } else { "\u{1f}" };
+        command.env(
+            "CARGO_ENCODED_RUSTFLAGS",
+            format!("{flags}{separator}--cap-lints=warn"),
+        );
+    } else {
+        command.env(
+            "RUSTFLAGS",
+            format!(
+                "--cap-lints=warn {}",
+                env::var("RUSTFLAGS").unwrap_or("".to_owned())
+            ),
+        );
+    }
 }
 
 fn denied_lint(messages: &[CheckOutput]) -> bool {

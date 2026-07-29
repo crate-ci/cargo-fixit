@@ -40,6 +40,61 @@ fn basic() {
 }
 
 #[cargo_test]
+fn fixes_denied_warnings_with_encoded_rustflags() {
+    let p = denied_warnings_project();
+
+    p.cargo_("fixit --allow-no-vcs")
+        .env("CARGO_ENCODED_RUSTFLAGS", "--cfg\u{1f}fixit_test")
+        .run();
+
+    assert!(!p.read_file("src/lib.rs").contains("let mut value"));
+}
+
+#[cargo_test]
+fn clippy_fixes_denied_warnings_with_encoded_rustflags() {
+    let p = denied_warnings_project();
+
+    p.cargo_("fixit --clippy --allow-no-vcs")
+        .env("CARGO_ENCODED_RUSTFLAGS", "--cfg\u{1f}fixit_test")
+        .run();
+
+    assert!(!p.read_file("src/lib.rs").contains("let mut value"));
+}
+
+#[cargo_test]
+fn fixes_denied_warnings_with_empty_encoded_rustflags() {
+    let p = denied_warnings_project();
+
+    p.cargo_("fixit --allow-no-vcs")
+        .env("CARGO_ENCODED_RUSTFLAGS", "")
+        .run();
+
+    assert!(!p.read_file("src/lib.rs").contains("let mut value"));
+}
+
+#[cargo_test]
+fn preserves_explicit_encoded_lint_caps() {
+    let p = denied_warnings_project();
+
+    p.cargo_("fixit --allow-no-vcs")
+        .env("CARGO_ENCODED_RUSTFLAGS", "--cap-lints=deny")
+        .with_status(101)
+        .with_stderr_contains("[ERROR] could not compile")
+        .run();
+
+    assert!(p.read_file("src/lib.rs").contains("let mut value"));
+}
+
+fn denied_warnings_project() -> Project {
+    project()
+        .file(
+            "src/lib.rs",
+            "#![deny(warnings)]\npub fn a() { let mut value = 1; let _ = value; }\n",
+        )
+        .build()
+}
+
+#[cargo_test]
 fn preserves_workspace_fingerprints_without_denied_warnings() {
     let p = project()
         .file(
