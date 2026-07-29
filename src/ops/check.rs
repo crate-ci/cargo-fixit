@@ -20,7 +20,23 @@ pub struct Artifact {
 pub struct Message {
     #[serde(flatten)]
     pub build_unit: BuildUnit,
-    pub message: Diagnostic,
+    pub message: MessageDiagnostic,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct MessageDiagnostic {
+    #[serde(flatten)]
+    pub level: DiagnosticLevel,
+    #[serde(flatten)]
+    pub diagnostic: Diagnostic,
+}
+
+#[derive(Deserialize, Debug, PartialEq, Eq)]
+#[serde(tag = "level", rename_all = "lowercase")]
+pub enum DiagnosticLevel {
+    Error,
+    #[serde(other)]
+    Other,
 }
 
 #[derive(Deserialize, Hash, PartialEq, Clone, Eq, Debug)]

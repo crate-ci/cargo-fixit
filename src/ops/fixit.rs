@@ -14,7 +14,7 @@ use tracing::{trace, warn};
 
 use crate::{
     core::{shell, sysroot::get_sysroot},
-    ops::check::{BuildUnit, CheckOutput, Message},
+    ops::check::{BuildUnit, CheckOutput, DiagnosticLevel, Message, MessageDiagnostic},
     util::{
         cli::CheckFlags, messages::gen_please_report_this_bug_text, package::format_package_id,
         vcs::VcsOpts,
@@ -67,6 +67,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
         .and_then(|i| i.parse().ok())
         .unwrap_or(4);
     let mut iteration = 0;
+    let mut lint_cap = false;
 
     let mut last_errors = IndexMap::new();
     let mut current_target: Option<BuildUnit> = None;
@@ -75,7 +76,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
     loop {
         trace!("iteration={iteration}");
         trace!("current_target={current_target:?}");
-        let (messages, exit_code) = check(&args)?;
+        let (messages, exit_code) = check(&args, &mut lint_cap)?;
 
         if !args.broken_code && exit_code != Some(0) {
             let mut out = String::new();
@@ -104,8 +105,9 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
                 out.push_str(&gen_please_report_this_bug_text(args.clippy));
 
                 let mut errors = messages
+                    .into_iter()
                     .filter_map(|e| match e {
-                        CheckOutput::Message(m) => m.message.rendered,
+                        CheckOutput::Message(m) => m.message.diagnostic.rendered,
                         _ => None,
                     })
                     .peekable();
@@ -117,10 +119,11 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
                     out.push_str(&format!("{}\n\n", e.trim_end()));
                 }
 
-                let (messages, _) = check(&args)?;
+                let (messages, _) = check(&args, &mut lint_cap)?;
                 let mut errors = messages
+                    .into_iter()
                     .filter_map(|e| match e {
-                        CheckOutput::Message(m) => m.message.rendered,
+                        CheckOutput::Message(m) => m.message.diagnostic.rendered,
                         _ => None,
                     })
                     .peekable();
@@ -135,8 +138,8 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
 
                 shell::warn(out)?;
             } else {
-                for e in messages.filter_map(|e| match e {
-                    CheckOutput::Message(m) => m.message.rendered,
+                for e in messages.into_iter().filter_map(|e| match e {
+                    CheckOutput::Message(m) => m.message.diagnostic.rendered,
                     _ => None,
                 }) {
                     shell::print_ansi_stderr(format!("{}\n\n", e.trim_end()).as_bytes())?;
@@ -147,7 +150,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
             anyhow::bail!("could not compile");
         }
 
-        let (mut errors, build_unit_map) = collect_errors(messages, &seen);
+        let (mut errors, build_unit_map) = collect_errors(messages.into_iter(), &seen);
 
         if iteration >= max_iterations {
             if let Some(target) = current_target {
@@ -254,31 +257,57 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
     Ok(())
 }
 
-fn check(args: &FixitArgs) -> CargoResult<(impl Iterator<Item = CheckOutput>, Option<i32>)> {
+fn check(args: &FixitArgs, lint_cap: &mut bool) -> CargoResult<(Vec<CheckOutput>, Option<i32>)> {
     let cmd = if args.clippy { "clippy" } else { "check" };
-    let command = std::process::Command::new(env!("CARGO"))
+    let mut command = std::process::Command::new(env!("CARGO"));
+    command
         .args([cmd, "--message-format", "json-diagnostic-rendered-ansi"])
         .args(args.check_flags.to_flags())
-        // This allows `cargo fix` to work even if the crate has #[deny(warnings)].
-        .env(
-            "RUSTFLAGS",
-            format!(
-                "--cap-lints=warn {}",
-                env::var("RUSTFLAGS").unwrap_or("".to_owned())
-            ),
-        )
         .stderr(Stdio::piped())
-        .stdout(Stdio::piped())
-        .output()?;
+        .stdout(Stdio::piped());
+    if *lint_cap {
+        cap_lints(&mut command);
+    }
+    let output = command.output()?;
+    let mut output = to_check_output(output);
 
-    let buf = BufReader::new(Cursor::new(command.stdout));
+    if output.1 != Some(0) && !*lint_cap && denied_lint(&output.0) {
+        *lint_cap = true;
+        cap_lints(&mut command);
+        output = to_check_output(command.output()?);
+    }
 
-    Ok((
+    Ok(output)
+}
+
+/// Applies the original lint cap while preserving existing compiler flags.
+fn cap_lints(command: &mut std::process::Command) {
+    command.env(
+        "RUSTFLAGS",
+        format!(
+            "--cap-lints=warn {}",
+            env::var("RUSTFLAGS").unwrap_or("".to_owned())
+        ),
+    );
+}
+
+fn denied_lint(messages: &[CheckOutput]) -> bool {
+    messages.iter().any(|message| {
+        matches!(&message, CheckOutput::Message(message)
+                if message.message.level == DiagnosticLevel::Error
+                    && message.message.diagnostic.code.is_some())
+    })
+}
+
+fn to_check_output(output: std::process::Output) -> (Vec<CheckOutput>, Option<i32>) {
+    let buf = BufReader::new(Cursor::new(output.stdout));
+    (
         buf.lines()
             .map_while(|l| l.ok())
-            .filter_map(|l| serde_json::from_str(&l).ok()),
-        command.status.code(),
-    ))
+            .filter_map(|l| serde_json::from_str(&l).ok())
+            .collect(),
+        output.status.code(),
+    )
 }
 
 #[tracing::instrument(skip_all)]
@@ -298,7 +327,7 @@ fn collect_errors(
     for message in messages {
         let Message {
             build_unit,
-            message: diagnostic,
+            message: MessageDiagnostic { diagnostic, .. },
         } = match message {
             CheckOutput::Message(m) => m,
             CheckOutput::Artifact(a) => {
