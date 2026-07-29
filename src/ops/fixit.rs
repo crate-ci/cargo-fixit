@@ -14,7 +14,7 @@ use tracing::{trace, warn};
 
 use crate::{
     core::{shell, sysroot::get_sysroot},
-    ops::check::{BuildUnit, CheckOutput, Message, MessageDiagnostic},
+    ops::check::{BuildUnit, CheckOutput, DiagnosticLevel, Message, MessageDiagnostic},
     util::{
         cli::CheckFlags, messages::gen_please_report_this_bug_text, package::format_package_id,
         vcs::VcsOpts,
@@ -67,6 +67,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
         .and_then(|i| i.parse().ok())
         .unwrap_or(4);
     let mut iteration = 0;
+    let mut lint_cap = false;
 
     let mut last_errors = IndexMap::new();
     let mut current_target: Option<BuildUnit> = None;
@@ -75,7 +76,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
     loop {
         trace!("iteration={iteration}");
         trace!("current_target={current_target:?}");
-        let (messages, exit_code) = check(&args)?;
+        let (messages, exit_code) = check(&args, &mut lint_cap)?;
 
         if !args.broken_code && exit_code != Some(0) {
             let mut out = String::new();
@@ -117,7 +118,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
                     out.push_str(&format!("{}\n\n", e.trim_end()));
                 }
 
-                let (messages, _) = check(&args)?;
+                let (messages, _) = check(&args, &mut lint_cap)?;
                 let mut errors = messages
                     .filter_map(|e| match e {
                         CheckOutput::Message(m) => m.message.diagnostic.rendered,
@@ -254,27 +255,54 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
     Ok(())
 }
 
-fn check(args: &FixitArgs) -> CargoResult<(impl Iterator<Item = CheckOutput>, Option<i32>)> {
+fn check(
+    args: &FixitArgs,
+    lint_cap: &mut bool,
+) -> CargoResult<(impl Iterator<Item = CheckOutput>, Option<i32>)> {
     let cmd = if args.clippy { "clippy" } else { "check" };
     let mut command = std::process::Command::new(env!("CARGO"));
     command
         .args([cmd, "--message-format", "json-diagnostic-rendered-ansi"])
         .args(args.check_flags.to_flags());
-    cap_lints(&mut command);
 
-    let output = command
-        .stderr(Stdio::piped())
-        .stdout(Stdio::piped())
-        .output()?;
+    if *lint_cap {
+        cap_lints(&mut command);
+    }
 
-    let buf = BufReader::new(Cursor::new(output.stdout));
+    command.stderr(Stdio::piped()).stdout(Stdio::piped());
+    let output = command.output()?;
+    let mut exit_code = output.status.code();
+    let mut messages = parse_messages(output.stdout);
+    let mut buffered = Vec::new();
 
-    Ok((
-        buf.lines()
-            .map_while(|l| l.ok())
-            .filter_map(|l| serde_json::from_str(&l).ok()),
-        output.status.code(),
-    ))
+    if exit_code != Some(0) && !*lint_cap {
+        while let Some(message) = messages.next() {
+            let denied_lint = matches!(&message, CheckOutput::Message(message)
+                if message.message.level == DiagnosticLevel::Error
+                    && message.message.diagnostic.code.is_some());
+            buffered.push(message);
+
+            if denied_lint {
+                *lint_cap = true;
+                cap_lints(&mut command);
+                let output = command.output()?;
+                exit_code = output.status.code();
+                buffered.clear();
+                messages = parse_messages(output.stdout);
+                break;
+            }
+        }
+    }
+
+    Ok((buffered.into_iter().chain(messages), exit_code))
+}
+
+/// Parses Cargo's compiler diagnostics and artifacts without buffering them.
+fn parse_messages(stdout: Vec<u8>) -> impl Iterator<Item = CheckOutput> {
+    BufReader::new(Cursor::new(stdout))
+        .lines()
+        .map_while(|line| line.ok())
+        .filter_map(|line| serde_json::from_str(&line).ok())
 }
 
 /// Applies the original lint cap while preserving existing compiler flags.

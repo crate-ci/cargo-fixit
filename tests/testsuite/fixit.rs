@@ -1,5 +1,5 @@
 use cargo_test_support::cargo_test;
-use cargo_test_support::{basic_manifest, compare::assert_ui, project};
+use cargo_test_support::{basic_manifest, compare::assert_ui, project, Project};
 use snapbox::str;
 
 use crate::fix::FixitProject;
@@ -37,6 +37,136 @@ fn basic() {
             
 "#]],
     );
+}
+
+#[cargo_test]
+fn preserves_workspace_fingerprints_without_denied_warnings() {
+    let p = project()
+        .file(
+            "Cargo.toml",
+            r#"
+                [package]
+                name = "foo"
+                version = "0.1.0"
+                edition = "2021"
+
+                [dependencies]
+                cached-dependency = { path = "cached-dependency" }
+            "#,
+        )
+        .file("src/lib.rs", "pub fn foo() { cached_dependency::foo(); }")
+        .file(
+            "cached-dependency/Cargo.toml",
+            &basic_manifest("cached-dependency", "0.1.0"),
+        )
+        .file("cached-dependency/src/lib.rs", "pub fn foo() {}")
+        .build();
+
+    p.cargo_("check").run();
+
+    let fingerprints_before = package_fingerprints(&p, &["foo-", "cached-dependency-"]);
+    assert_eq!(fingerprints_before.len(), 2);
+
+    p.cargo_("fixit --allow-no-vcs").run();
+
+    assert_eq!(
+        package_fingerprints(&p, &["foo-", "cached-dependency-"]),
+        fingerprints_before
+    );
+}
+
+#[cargo_test]
+fn clippy_preserves_workspace_fingerprints_without_denied_warnings() {
+    let p = project()
+        .file(
+            "Cargo.toml",
+            "[workspace]\nmembers = ['app', 'cached-dependency']\nresolver = '2'\n",
+        )
+        .file(
+            "app/Cargo.toml",
+            &format!(
+                "{}\n[dependencies]\ncached-dependency = {{ path = '../cached-dependency' }}\n",
+                basic_manifest("app", "0.1.0")
+            ),
+        )
+        .file(
+            "app/src/lib.rs",
+            "pub fn app() { cached_dependency::foo(); }\n",
+        )
+        .file(
+            "cached-dependency/Cargo.toml",
+            &basic_manifest("cached-dependency", "0.1.0"),
+        )
+        .file("cached-dependency/src/lib.rs", "pub fn foo() {}\n")
+        .build();
+
+    p.cargo_("clippy --workspace").run();
+
+    let fingerprints_before = package_fingerprints(&p, &["app-", "cached-dependency-"]);
+    assert_eq!(fingerprints_before.len(), 2);
+
+    p.cargo_("fixit --clippy --workspace --allow-no-vcs").run();
+
+    assert_eq!(
+        package_fingerprints(&p, &["app-", "cached-dependency-"]),
+        fingerprints_before
+    );
+}
+
+#[cargo_test]
+fn clippy_fixes_denied_warnings() {
+    let p = project()
+        .file(
+            "src/lib.rs",
+            "#![deny(warnings)]\npub fn a() { let mut value = 1; let _ = value; }\n",
+        )
+        .build();
+
+    p.cargo_("fixit --clippy --allow-no-vcs")
+        .with_status(0)
+        .run();
+
+    assert!(!p.read_file("src/lib.rs").contains("let mut value"));
+}
+
+#[cargo_test]
+fn fixes_denied_lints_with_compiler_error_codes() {
+    let p = project()
+        .file(
+            "src/lib.rs",
+            "#![allow(unused_variables, non_snake_case)]\nenum Choice { Value }\npub fn check() { match Choice::Value { Value => {} } }\n",
+        )
+        .build();
+
+    p.cargo_("fixit --allow-no-vcs").run();
+
+    assert!(p.read_file("src/lib.rs").contains("Choice::Value =>"));
+}
+
+fn package_fingerprints(project: &Project, packages: &[&str]) -> Vec<(String, Vec<u8>)> {
+    let mut fingerprints = std::fs::read_dir(project.build_dir().join("debug/.fingerprint"))
+        .unwrap()
+        .map(Result::unwrap)
+        .filter(|entry| {
+            let name = entry.file_name();
+            packages
+                .iter()
+                .any(|package| name.to_string_lossy().starts_with(package))
+        })
+        .map(|entry| {
+            let dep_info = std::fs::read_dir(entry.path())
+                .unwrap()
+                .map(Result::unwrap)
+                .find(|file| file.file_name().to_string_lossy().starts_with("dep-lib-"))
+                .unwrap();
+            (
+                entry.file_name().to_string_lossy().into_owned(),
+                std::fs::read(dep_info.path()).unwrap(),
+            )
+        })
+        .collect::<Vec<_>>();
+    fingerprints.sort_unstable();
+    fingerprints
 }
 
 #[cargo_test]
