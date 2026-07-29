@@ -62,6 +62,21 @@ impl VcsOpts {
                 match status.status() {
                     git2::Status::CURRENT => (),
                     git2::Status::INDEX_NEW
+                        if repo
+                            .index()?
+                            .get_path(path.as_ref(), 0)
+                            .is_some_and(|entry| {
+                                git2::IndexEntryExtendedFlag::from_bits_truncate(
+                                    entry.flags_extended,
+                                )
+                                .is_intent_to_add()
+                            }) =>
+                    {
+                        if !self.allow_dirty {
+                            dirty_files.push(path.to_owned());
+                        }
+                    }
+                    git2::Status::INDEX_NEW
                     | git2::Status::INDEX_MODIFIED
                     | git2::Status::INDEX_DELETED
                     | git2::Status::INDEX_RENAMED

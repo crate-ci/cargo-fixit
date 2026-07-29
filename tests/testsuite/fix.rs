@@ -984,11 +984,7 @@ fn warns_about_intent_to_add_working_directory() {
             .run();
     }
 
-    project
-        .cargo_("fix --allow-dirty")
-        .with_status(101)
-        .with_stderr_contains("  * src/new.rs (staged)")
-        .run();
+    project.cargo_("fix --allow-dirty").run();
 }
 
 #[cargo_test]
