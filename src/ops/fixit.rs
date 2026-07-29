@@ -14,7 +14,7 @@ use tracing::{trace, warn};
 
 use crate::{
     core::{shell, sysroot::get_sysroot},
-    ops::check::{BuildUnit, CheckOutput, Message},
+    ops::check::{BuildUnit, CheckOutput, Message, MessageDiagnostic},
     util::{
         cli::CheckFlags, messages::gen_please_report_this_bug_text, package::format_package_id,
         vcs::VcsOpts,
@@ -105,7 +105,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
 
                 let mut errors = messages
                     .filter_map(|e| match e {
-                        CheckOutput::Message(m) => m.message.rendered,
+                        CheckOutput::Message(m) => m.message.diagnostic.rendered,
                         _ => None,
                     })
                     .peekable();
@@ -120,7 +120,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
                 let (messages, _) = check(&args)?;
                 let mut errors = messages
                     .filter_map(|e| match e {
-                        CheckOutput::Message(m) => m.message.rendered,
+                        CheckOutput::Message(m) => m.message.diagnostic.rendered,
                         _ => None,
                     })
                     .peekable();
@@ -136,7 +136,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
                 shell::warn(out)?;
             } else {
                 for e in messages.filter_map(|e| match e {
-                    CheckOutput::Message(m) => m.message.rendered,
+                    CheckOutput::Message(m) => m.message.diagnostic.rendered,
                     _ => None,
                 }) {
                     shell::print_ansi_stderr(format!("{}\n\n", e.trim_end()).as_bytes())?;
@@ -308,7 +308,7 @@ fn collect_errors(
     for message in messages {
         let Message {
             build_unit,
-            message: diagnostic,
+            message: MessageDiagnostic { diagnostic, .. },
         } = match message {
             CheckOutput::Message(m) => m,
             CheckOutput::Artifact(a) => {
