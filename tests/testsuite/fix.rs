@@ -923,6 +923,10 @@ fn warns_about_dirty_working_directory() {
 
 "#]])
         .run();
+    p.cargo_("fix --allow-staged")
+        .with_status(101)
+        .with_stderr_contains("  * src/lib.rs (dirty)")
+        .run();
     p.cargo_("fix --allow-dirty")
         .with_stderr_data(str![[r#"
 [CHECKING] foo v0.0.1
@@ -948,6 +952,10 @@ fn warns_about_staged_working_directory() {
 
 
 "#]])
+        .run();
+    p.cargo_("fix --allow-dirty")
+        .with_status(101)
+        .with_stderr_contains("  * src/lib.rs (staged)")
         .run();
     p.cargo_("fix --allow-staged")
         .with_stderr_data(str![[r#"
