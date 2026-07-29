@@ -150,7 +150,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
             anyhow::bail!("could not compile");
         }
 
-        let (mut errors, build_unit_map) = collect_errors(messages.into_iter(), &seen);
+        let (mut errors, mut build_unit_map) = collect_errors(messages.into_iter(), &seen);
 
         if iteration >= max_iterations {
             if let Some(target) = current_target {
@@ -171,6 +171,17 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
             }
         }
 
+        let mut finalized_target = false;
+        if let Some(target) = current_target.as_ref() {
+            if build_unit_map.get(target).is_none_or(IndexMap::is_empty) {
+                let target = current_target.take().expect("current target is present");
+                build_unit_map.shift_remove(&target);
+                finish_target(target, &mut files, &mut errors, &mut seen)?;
+                iteration = 0;
+                finalized_target = true;
+            }
+        }
+
         let mut made_changes = false;
 
         for (build_unit, file_map) in build_unit_map {
@@ -183,6 +194,9 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
                 .or_insert_with(IndexSet::new);
 
             if current_target.is_none() && file_map.is_empty() {
+                if finalized_target && build_unit_errors.is_empty() {
+                    continue;
+                }
                 if seen.iter().all(|b| b.package_id != build_unit.package_id) {
                     shell::status("Checking", format_package_id(&build_unit.package_id)?)?;
                 }
@@ -212,9 +226,9 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
                 finish_target(pkg, &mut files, &mut last_errors, &mut seen)?;
                 current_target = None;
                 iteration = 0;
-            } else {
-                break;
+                continue;
             }
+            break;
         }
     }
 
