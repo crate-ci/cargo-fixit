@@ -263,6 +263,37 @@ fn do_not_fix_non_relevant_deps() {
 }
 
 #[cargo_test]
+fn clippy_fixes_denied_warnings_in_external_path_dependencies() {
+    let p = project()
+        .no_manifest()
+        .file(
+            "foo/Cargo.toml",
+            r#"
+                [package]
+                name = "foo"
+                version = "0.1.0"
+                edition = "2021"
+
+                [dependencies]
+                bar = { path = '../bar' }
+
+                [workspace]
+            "#,
+        )
+        .file("foo/src/lib.rs", "pub fn foo() { bar::foo(); }")
+        .file("bar/Cargo.toml", &basic_manifest("bar", "0.1.0"))
+        .file(
+            "bar/src/lib.rs",
+            "#![deny(warnings)]\npub fn foo() { let mut value = 1; let _ = value; }\n",
+        )
+        .build();
+
+    p.cargo_("fix --clippy --allow-no-vcs").cwd("foo").run();
+
+    assert!(!p.read_file("bar/src/lib.rs").contains("let mut value"));
+}
+
+#[cargo_test]
 fn prepare_for_2018() {
     let p = project()
         .file(
