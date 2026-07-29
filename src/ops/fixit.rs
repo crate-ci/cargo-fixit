@@ -265,13 +265,7 @@ fn check(args: &FixitArgs) -> CargoResult<(impl Iterator<Item = CheckOutput>, Op
     cap_lints(&mut command);
     let output = command.output()?;
 
-    let buf = BufReader::new(Cursor::new(output.stdout));
-    Ok((
-        buf.lines()
-            .map_while(|l| l.ok())
-            .filter_map(|l| serde_json::from_str(&l).ok()),
-        output.status.code(),
-    ))
+    Ok(to_check_output(output))
 }
 
 /// Applies the original lint cap while preserving existing compiler flags.
@@ -283,6 +277,18 @@ fn cap_lints(command: &mut std::process::Command) {
             env::var("RUSTFLAGS").unwrap_or("".to_owned())
         ),
     );
+}
+
+fn to_check_output(
+    output: std::process::Output,
+) -> (impl Iterator<Item = CheckOutput>, Option<i32>) {
+    let buf = BufReader::new(Cursor::new(output.stdout));
+    (
+        buf.lines()
+            .map_while(|l| l.ok())
+            .filter_map(|l| serde_json::from_str(&l).ok()),
+        output.status.code(),
+    )
 }
 
 #[tracing::instrument(skip_all)]
