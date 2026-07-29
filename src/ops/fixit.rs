@@ -256,29 +256,33 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
 
 fn check(args: &FixitArgs) -> CargoResult<(impl Iterator<Item = CheckOutput>, Option<i32>)> {
     let cmd = if args.clippy { "clippy" } else { "check" };
-    let command = std::process::Command::new(env!("CARGO"))
+    let mut command = std::process::Command::new(env!("CARGO"));
+    command
         .args([cmd, "--message-format", "json-diagnostic-rendered-ansi"])
         .args(args.check_flags.to_flags())
-        // This allows `cargo fix` to work even if the crate has #[deny(warnings)].
-        .env(
-            "RUSTFLAGS",
-            format!(
-                "--cap-lints=warn {}",
-                env::var("RUSTFLAGS").unwrap_or("".to_owned())
-            ),
-        )
         .stderr(Stdio::piped())
-        .stdout(Stdio::piped())
-        .output()?;
+        .stdout(Stdio::piped());
+    cap_lints(&mut command);
+    let output = command.output()?;
 
-    let buf = BufReader::new(Cursor::new(command.stdout));
-
+    let buf = BufReader::new(Cursor::new(output.stdout));
     Ok((
         buf.lines()
             .map_while(|l| l.ok())
             .filter_map(|l| serde_json::from_str(&l).ok()),
-        command.status.code(),
+        output.status.code(),
     ))
+}
+
+/// Applies the original lint cap while preserving existing compiler flags.
+fn cap_lints(command: &mut std::process::Command) {
+    command.env(
+        "RUSTFLAGS",
+        format!(
+            "--cap-lints=warn {}",
+            env::var("RUSTFLAGS").unwrap_or("".to_owned())
+        ),
+    );
 }
 
 #[tracing::instrument(skip_all)]
