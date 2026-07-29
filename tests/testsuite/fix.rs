@@ -966,6 +966,32 @@ fn warns_about_staged_working_directory() {
 }
 
 #[cargo_test]
+fn warns_about_intent_to_add_working_directory() {
+    let project = git::new("foo", |project| {
+        project.file("src/lib.rs", "pub fn foo() {}")
+    });
+    project.change_file("src/new.rs", "pub fn new() {}");
+    project
+        .process("git")
+        .args(&["add", "--intent-to-add", "src/new.rs"])
+        .run();
+
+    for args in ["fix", "fix --allow-staged"] {
+        project
+            .cargo_(args)
+            .with_status(101)
+            .with_stderr_contains("  * src/new.rs (dirty)")
+            .run();
+    }
+
+    project
+        .cargo_("fix --allow-dirty")
+        .with_status(101)
+        .with_stderr_contains("  * src/new.rs (staged)")
+        .run();
+}
+
+#[cargo_test]
 fn errors_about_untracked_files() {
     let mut git_project = project().at("foo");
     git_project = git_project.file("src/lib.rs", "pub fn foo() {}");
