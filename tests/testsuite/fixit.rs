@@ -69,7 +69,7 @@ fn preserves_workspace_fingerprints_without_denied_warnings() {
 
     p.cargo_("fixit --allow-no-vcs").run();
 
-    assert_ne!(
+    assert_eq!(
         package_fingerprints(&p, &["foo-", "cached-dependency-"]),
         fingerprints_before
     );
@@ -107,7 +107,7 @@ fn clippy_preserves_workspace_fingerprints_without_denied_warnings() {
 
     p.cargo_("fixit --clippy --workspace --allow-no-vcs").run();
 
-    assert_ne!(
+    assert_eq!(
         package_fingerprints(&p, &["app-", "cached-dependency-"]),
         fingerprints_before
     );
