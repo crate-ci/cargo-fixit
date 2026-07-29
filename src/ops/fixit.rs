@@ -104,6 +104,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
                 out.push_str(&gen_please_report_this_bug_text(args.clippy));
 
                 let mut errors = messages
+                    .into_iter()
                     .filter_map(|e| match e {
                         CheckOutput::Message(m) => m.message.diagnostic.rendered,
                         _ => None,
@@ -119,6 +120,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
 
                 let (messages, _) = check(&args)?;
                 let mut errors = messages
+                    .into_iter()
                     .filter_map(|e| match e {
                         CheckOutput::Message(m) => m.message.diagnostic.rendered,
                         _ => None,
@@ -135,7 +137,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
 
                 shell::warn(out)?;
             } else {
-                for e in messages.filter_map(|e| match e {
+                for e in messages.into_iter().filter_map(|e| match e {
                     CheckOutput::Message(m) => m.message.diagnostic.rendered,
                     _ => None,
                 }) {
@@ -147,7 +149,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
             anyhow::bail!("could not compile");
         }
 
-        let (mut errors, build_unit_map) = collect_errors(messages, &seen);
+        let (mut errors, build_unit_map) = collect_errors(messages.into_iter(), &seen);
 
         if iteration >= max_iterations {
             if let Some(target) = current_target {
@@ -254,7 +256,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
     Ok(())
 }
 
-fn check(args: &FixitArgs) -> CargoResult<(impl Iterator<Item = CheckOutput>, Option<i32>)> {
+fn check(args: &FixitArgs) -> CargoResult<(Vec<CheckOutput>, Option<i32>)> {
     let cmd = if args.clippy { "clippy" } else { "check" };
     let mut command = std::process::Command::new(env!("CARGO"));
     command
@@ -279,14 +281,13 @@ fn cap_lints(command: &mut std::process::Command) {
     );
 }
 
-fn to_check_output(
-    output: std::process::Output,
-) -> (impl Iterator<Item = CheckOutput>, Option<i32>) {
+fn to_check_output(output: std::process::Output) -> (Vec<CheckOutput>, Option<i32>) {
     let buf = BufReader::new(Cursor::new(output.stdout));
     (
         buf.lines()
             .map_while(|l| l.ok())
-            .filter_map(|l| serde_json::from_str(&l).ok()),
+            .filter_map(|l| serde_json::from_str(&l).ok())
+            .collect(),
         output.status.code(),
     )
 }
