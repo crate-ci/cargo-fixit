@@ -52,6 +52,11 @@ impl VcsOpts {
         let mut repo_opts = git2::StatusOptions::new();
         repo_opts.include_ignored(false);
         repo_opts.include_untracked(true);
+        if self.allow_dirty {
+            repo_opts.show(git2::StatusShow::Index);
+        } else if self.allow_staged {
+            repo_opts.show(git2::StatusShow::Workdir);
+        }
         for status in repo.statuses(Some(&mut repo_opts))?.iter() {
             if let Some(path) = status.path() {
                 match status.status() {
