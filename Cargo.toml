@@ -143,8 +143,8 @@ colorchoice-clap = "1.0.8"
 
 [dev-dependencies]
 automod = "1.0.17"
-cargo-test-support = "0.8.1"
-snapbox = { version = "0.6.24", features = ["cmd", "path"] }
+cargo-test-support = "0.11.3"
+snapbox = { version = "1.2.2", features = ["cmd", "path"] }
 
 [lints]
 workspace = true
