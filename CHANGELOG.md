@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+## [0.1.8] - 2026-07-30
+
 ### Performance
 
 - Prefer reusing the existing cache when lints aren't denied
@@ -76,7 +78,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [0.1.0] - 2025-07-18
 
 <!-- next-url -->
-[Unreleased]: https://github.com/crate-ci/cargo-fixit/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/crate-ci/cargo-fixit/compare/v0.1.8...HEAD
+[0.1.8]: https://github.com/crate-ci/cargo-fixit/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/crate-ci/cargo-fixit/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/crate-ci/cargo-fixit/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/crate-ci/cargo-fixit/compare/v0.1.4...v0.1.5
