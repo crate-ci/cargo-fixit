@@ -327,7 +327,7 @@ fn fix_no_suggestions() {
 fn fix_one_suggestion() {
     // One suggested fix, with a successful verification, no output.
     expect_fix_runs_rustc_n_times(
-        &[Step::OneFix, Step::SuccessNoOutput, Step::SuccessNoOutput],
+        &[Step::OneFix, Step::SuccessNoOutput],
         |_execs| {},
         str![[r#"
 [CHECKING] foo v0.0.1
@@ -343,7 +343,7 @@ fn fix_one_suggestion() {
 fn fix_one_overlapping() {
     // Two suggested fixes, where one fails, then the next step returns no suggestions.
     expect_fix_runs_rustc_n_times(
-        &[Step::TwoFixOverlapping, Step::SuccessNoOutput, Step::SuccessNoOutput],
+        &[Step::TwoFixOverlapping, Step::SuccessNoOutput],
         |_execs| {},
         str![[r#"
 [CHECKING] foo v0.0.1
@@ -517,7 +517,7 @@ rustc fix shim error count=1
 fn broken_code_one_suggestion() {
     // --broken-code where there is an error and a suggestion.
     expect_fix_runs_rustc_n_times(
-        &[Step::OneFixError, Step::Error, Step::SuccessNoOutput],
+        &[Step::OneFixError, Step::Error],
         |execs| {
             execs.arg("--broken-code");
         },
