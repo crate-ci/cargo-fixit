@@ -978,15 +978,11 @@ fn warns_about_intent_to_add_working_directory() {
             .run();
 
         for args in ["fix", "fix --allow-staged"] {
-            if name == "empty" && args == "fix --allow-staged" {
-                project.cargo_(args).run();
-            } else {
-                project
-                    .cargo_(args)
-                    .with_status(101)
-                    .with_stderr_contains("  * src/new.rs (dirty)")
-                    .run();
-            }
+            project
+                .cargo_(args)
+                .with_status(101)
+                .with_stderr_contains("  * src/new.rs (dirty)")
+                .run();
         }
 
         project.cargo_("fix --allow-dirty").run();
