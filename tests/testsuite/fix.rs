@@ -923,6 +923,10 @@ fn warns_about_dirty_working_directory() {
 
 "#]])
         .run();
+    p.cargo_("fix --allow-staged")
+        .with_status(101)
+        .with_stderr_contains("  * src/lib.rs (dirty)")
+        .run();
     p.cargo_("fix --allow-dirty")
         .with_stderr_data(str![[r#"
 [CHECKING] foo v0.0.1
@@ -949,12 +953,38 @@ fn warns_about_staged_working_directory() {
 
 "#]])
         .run();
+    p.cargo_("fix --allow-dirty")
+        .with_status(101)
+        .with_stderr_contains("  * src/lib.rs (staged)")
+        .run();
     p.cargo_("fix --allow-staged")
         .with_stderr_data(str![[r#"
 [CHECKING] foo v0.0.1
 
 "#]])
         .run();
+}
+
+#[cargo_test]
+fn warns_about_intent_to_add_working_directory() {
+    let project = git::new("foo", |project| {
+        project.file("src/lib.rs", "pub fn foo() {}")
+    });
+    project.change_file("src/new.rs", "pub fn new() {}");
+    project
+        .process("git")
+        .args(&["add", "--intent-to-add", "src/new.rs"])
+        .run();
+
+    for args in ["fix", "fix --allow-staged"] {
+        project
+            .cargo_(args)
+            .with_status(101)
+            .with_stderr_contains("  * src/new.rs (dirty)")
+            .run();
+    }
+
+    project.cargo_("fix --allow-dirty").run();
 }
 
 #[cargo_test]
