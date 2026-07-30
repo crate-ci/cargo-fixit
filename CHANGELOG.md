@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Performance
+
+- Prefer reusing the existing cache when lints aren't denied
+- Remove throwaway git status check work
+- Avoid calling rustc if we don't need to check for fixes touching the sysroot
+- Reduce redundant `cargo check` calls
+
+### Fixes
+
+- Don't break with `CARGO_ENCODED_RUSTFLAGS`
+- Handle `intent-to-add` git files
+
 ## [0.1.7] - 2025-08-13
 
 ### Features
