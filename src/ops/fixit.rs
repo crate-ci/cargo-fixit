@@ -476,15 +476,13 @@ fn fix_errors(
         }
         if fixed.modified() {
             let new_source = fixed.finish()?;
+            let file_state = files.entry(file.clone()).or_insert(File {
+                fixes: 0,
+                original_source: source,
+            });
             paths::write(&file, new_source)?;
             made_changes = true;
-            files
-                .entry(file)
-                .or_insert(File {
-                    fixes: 0,
-                    original_source: source,
-                })
-                .fixes += num_fixes;
+            file_state.fixes += num_fixes;
         }
     }
 
