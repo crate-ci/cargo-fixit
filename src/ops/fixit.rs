@@ -60,8 +60,6 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
 
     args.vcs_opts.valid_vcs()?;
 
-    let mut files: IndexMap<String, File> = IndexMap::new();
-
     let max_iterations: usize = env::var("CARGO_FIX_MAX_RETRIES")
         .ok()
         .and_then(|i| i.parse().ok())
@@ -71,6 +69,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
 
     let mut last_errors = IndexMap::new();
     let mut current_target: Option<BuildUnit> = None;
+    let mut active_targets: IndexMap<BuildUnit, IndexMap<String, File>> = IndexMap::new();
     let mut seen = HashSet::new();
 
     loop {
@@ -94,7 +93,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
                         fixes: _,
                         original_source,
                     },
-                ) in &files
+                ) in active_targets.values().flat_map(|files| files.iter())
                 {
                     out.push_str(&format!("  * {file}\n"));
                     shell::note(format!("reverting `{file}` to its original state"))?;
@@ -163,7 +162,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
                             .filter_map(|(_, diagnostic)| diagnostic.clone()),
                     );
                 }
-                finish_target(target, &mut files, &mut errors, &mut seen)?;
+                finish_target(target, &mut active_targets, &mut errors, &mut seen)?;
                 current_target = None;
                 iteration = 0;
             } else {
@@ -176,7 +175,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
             if build_unit_map.get(target).is_none_or(IndexMap::is_empty) {
                 let target = current_target.take().expect("current target is present");
                 build_unit_map.shift_remove(&target);
-                finish_target(target, &mut files, &mut errors, &mut seen)?;
+                finish_target(target, &mut active_targets, &mut errors, &mut seen)?;
                 iteration = 0;
                 finalized_target = true;
             }
@@ -208,10 +207,14 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
                 seen.insert(build_unit);
             } else if !file_map.is_empty()
                 && current_target.get_or_insert(build_unit.clone()) == &build_unit
-                && fix_errors(&mut files, file_map, build_unit_errors)?
             {
-                made_changes = true;
-                break;
+                let target_files = active_targets.entry(build_unit.clone()).or_default();
+                if fix_errors(target_files, file_map, build_unit_errors)? {
+                    made_changes = true;
+                    break;
+                } else if target_files.is_empty() {
+                    active_targets.shift_remove(&build_unit);
+                }
             }
         }
 
@@ -223,7 +226,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
 
         if !made_changes {
             if let Some(pkg) = current_target {
-                finish_target(pkg, &mut files, &mut last_errors, &mut seen)?;
+                finish_target(pkg, &mut active_targets, &mut last_errors, &mut seen)?;
                 current_target = None;
                 iteration = 0;
                 continue;
@@ -232,8 +235,10 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
         }
     }
 
-    for (name, file) in files {
-        shell::fixed(name, file.fixes)?;
+    for files in active_targets.into_values() {
+        for (name, file) in files {
+            shell::fixed(name, file.fixes)?;
+        }
     }
 
     for e in last_errors.iter().flat_map(|(_, e)| e) {
@@ -246,7 +251,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
 /// Marks a target complete after reporting its fixes and remaining diagnostics.
 fn finish_target(
     target: BuildUnit,
-    files: &mut IndexMap<String, File>,
+    active_targets: &mut IndexMap<BuildUnit, IndexMap<String, File>>,
     errors: &mut IndexMap<BuildUnit, IndexSet<String>>,
     seen: &mut HashSet<BuildUnit>,
 ) -> CargoResult<()> {
@@ -257,7 +262,7 @@ fn finish_target(
         shell::status("Checking", format_package_id(&target.package_id)?)?;
     }
 
-    for (name, file) in std::mem::take(files) {
+    for (name, file) in active_targets.shift_remove(&target).unwrap_or_default() {
         shell::fixed(name, file.fixes)?;
     }
 
