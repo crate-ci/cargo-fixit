@@ -284,7 +284,7 @@ fn fixable_and_unfixable() {
 
 #[cfg(unix)]
 #[cargo_test]
-fn retains_prior_writes_when_later_write_fails() {
+fn restores_prior_writes_when_later_write_fails() {
     use std::os::unix::fs::PermissionsExt;
 
     let original_lib = "mod module;\npub fn lib() { let mut value = 1; let _ = value; }\n";
@@ -308,10 +308,7 @@ fn retains_prior_writes_when_later_write_fails() {
 
     std::fs::set_permissions(&unwritable, std::fs::Permissions::from_mode(0o644)).unwrap();
     assert_eq!(p.read_file("src/lib.rs"), original_lib);
-    assert_eq!(
-        p.read_file("src/module.rs"),
-        "pub fn module() { let value = 1; let _ = value; }\n"
-    );
+    assert_eq!(p.read_file("src/module.rs"), original_module);
 }
 
 #[cfg(unix)]

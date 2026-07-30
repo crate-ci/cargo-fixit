@@ -60,6 +60,22 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
 
     args.vcs_opts.valid_vcs()?;
 
+    let mut active_targets = IndexMap::new();
+    match fix(&args, &mut active_targets) {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            for (file, original) in active_targets.values().flat_map(|files| files.iter()) {
+                paths::write(file, &original.original_source)?;
+            }
+            Err(error)
+        }
+    }
+}
+
+fn fix(
+    args: &FixitArgs,
+    active_targets: &mut IndexMap<BuildUnit, IndexMap<String, File>>,
+) -> CargoResult<()> {
     let max_iterations: usize = env::var("CARGO_FIX_MAX_RETRIES")
         .ok()
         .and_then(|i| i.parse().ok())
@@ -69,13 +85,12 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
 
     let mut last_errors = IndexMap::new();
     let mut current_target: Option<BuildUnit> = None;
-    let mut active_targets: IndexMap<BuildUnit, IndexMap<String, File>> = IndexMap::new();
     let mut seen = HashSet::new();
 
     loop {
         trace!("iteration={iteration}");
         trace!("current_target={current_target:?}");
-        let (messages, exit_code) = check(&args, &mut lint_cap)?;
+        let (messages, exit_code) = check(args, &mut lint_cap)?;
 
         if !args.broken_code && exit_code != Some(0) {
             let mut out = String::new();
@@ -99,6 +114,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
                     shell::note(format!("reverting `{file}` to its original state"))?;
                     paths::write(file, original_source)?;
                 }
+                active_targets.clear();
                 out.push('\n');
 
                 out.push_str(&gen_please_report_this_bug_text(args.clippy));
@@ -118,7 +134,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
                     out.push_str(&format!("{}\n\n", e.trim_end()));
                 }
 
-                let (messages, _) = check(&args, &mut lint_cap)?;
+                let (messages, _) = check(args, &mut lint_cap)?;
                 let mut errors = messages
                     .into_iter()
                     .filter_map(|e| match e {
@@ -162,7 +178,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
                             .filter_map(|(_, diagnostic)| diagnostic.clone()),
                     );
                 }
-                finish_target(target, &mut active_targets, &mut errors, &mut seen)?;
+                finish_target(target, active_targets, &mut errors, &mut seen)?;
                 current_target = None;
                 iteration = 0;
             } else {
@@ -175,7 +191,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
             if build_unit_map.get(target).is_none_or(IndexMap::is_empty) {
                 let target = current_target.take().expect("current target is present");
                 build_unit_map.shift_remove(&target);
-                finish_target(target, &mut active_targets, &mut errors, &mut seen)?;
+                finish_target(target, active_targets, &mut errors, &mut seen)?;
                 iteration = 0;
                 finalized_target = true;
             }
@@ -226,7 +242,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
 
         if !made_changes {
             if let Some(pkg) = current_target {
-                finish_target(pkg, &mut active_targets, &mut last_errors, &mut seen)?;
+                finish_target(pkg, active_targets, &mut last_errors, &mut seen)?;
                 current_target = None;
                 iteration = 0;
                 continue;
@@ -235,7 +251,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
         }
     }
 
-    for files in active_targets.into_values() {
+    for files in active_targets.values() {
         for (name, file) in files {
             shell::fixed(name, file.fixes)?;
         }
@@ -245,6 +261,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
         shell::print_ansi_stderr(format!("{}\n\n", e.trim_end()).as_bytes())?;
     }
 
+    active_targets.clear();
     Ok(())
 }
 
@@ -262,14 +279,18 @@ fn finish_target(
         shell::status("Checking", format_package_id(&target.package_id)?)?;
     }
 
-    for (name, file) in active_targets.shift_remove(&target).unwrap_or_default() {
-        shell::fixed(name, file.fixes)?;
+    if let Some(files) = active_targets.get(&target) {
+        for (name, file) in files {
+            shell::fixed(name, file.fixes)?;
+        }
     }
 
-    for error in errors.shift_remove(&target).unwrap_or_default() {
+    for error in errors.get(&target).into_iter().flatten() {
         shell::print_ansi_stderr(format!("{}\n\n", error.trim_end()).as_bytes())?;
     }
 
+    active_targets.shift_remove(&target);
+    errors.shift_remove(&target);
     seen.insert(target);
     Ok(())
 }
