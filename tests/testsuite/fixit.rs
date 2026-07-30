@@ -314,11 +314,11 @@ fn restores_prior_writes_when_later_write_fails() {
 
 #[cfg(unix)]
 #[cargo_test]
-fn retains_completed_target_when_later_write_fails() {
+fn restores_all_files_when_batched_write_fails() {
     use std::os::unix::fs::PermissionsExt;
 
     let original_a = "pub fn a() -> i32 { let mut value = 1; value }\n";
-    let original_b = "pub fn b() -> i32 { let mut value = a::a(); value }\n";
+    let original_b = "pub fn b() -> i32 { let mut value = 1; value }\n";
     let p = project()
         .file(
             "Cargo.toml",
@@ -326,10 +326,7 @@ fn retains_completed_target_when_later_write_fails() {
         )
         .file("a/Cargo.toml", &basic_manifest("a", "0.1.0"))
         .file("a/src/lib.rs", original_a)
-        .file(
-            "b/Cargo.toml",
-            "[package]\nname = \"b\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\na = { path = \"../a\" }\n",
-        )
+        .file("b/Cargo.toml", &basic_manifest("b", "0.1.0"))
         .file("b/src/lib.rs", original_b)
         .build();
 
@@ -339,18 +336,13 @@ fn retains_completed_target_when_later_write_fails() {
     p.cargo_("fixit --workspace --allow-no-vcs")
         .with_status(101)
         .with_stderr_data(str![[r#"
-[CHECKING] a v0.1.0
-[FIXED] a/src/lib.rs (1 fix)
 [ERROR] failed to write `b/src/lib.rs`: [..]
 
 "#]])
         .run();
 
     std::fs::set_permissions(&unwritable, std::fs::Permissions::from_mode(0o644)).unwrap();
-    assert_eq!(
-        p.read_file("a/src/lib.rs"),
-        "pub fn a() -> i32 { let value = 1; value }\n"
-    );
+    assert_eq!(p.read_file("a/src/lib.rs"), original_a);
     assert_eq!(p.read_file("b/src/lib.rs"), original_b);
 }
 
@@ -414,11 +406,12 @@ fn hardlinked_workspace_packages() {
 
     assert_eq!(p.read_file("a/src/lib.rs"), fixed);
     assert_eq!(p.read_file("b/src/lib.rs"), fixed);
+    assert!(same_file::is_same_file(&source, &hardlink).unwrap());
     p.cargo_("check --workspace").run();
 }
 
 #[cargo_test]
-fn dependency_chain_is_fixed_sequentially() {
+fn dependency_graph_batches_only_independent_packages() {
     let p = project()
         .file(
             "Cargo.toml",
@@ -479,7 +472,8 @@ fn dependency_chain_is_fixed_sequentially() {
         .run();
 
     let crate_invocations = crate::fix::rustc_invocations(&rustc_log, ["a", "b", "c", "d"]);
-    assert_eq!(crate_invocations, [5, 3, 2, 2]);
+    // `c` and `d` share a batch, while `b` and then `a` wait for their dependencies.
+    assert_eq!(crate_invocations, [4, 3, 2, 2]);
 }
 
 #[cargo_test]

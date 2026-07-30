@@ -246,4 +246,47 @@ impl CheckFlags {
         }
         out
     }
+
+    /// Returns flags that can affect dependency resolution.
+    ///
+    /// Package and target filters are omitted so the resulting graph stays conservative.
+    pub(crate) fn to_metadata_flags(&self) -> Vec<String> {
+        let mut out = Vec::new();
+
+        for feature in &self.features {
+            out.push("--features".to_owned());
+            out.push(feature.clone());
+        }
+        if self.all_features {
+            out.push("--all-features".to_owned());
+        }
+        if self.no_default_features {
+            out.push("--no-default-features".to_owned());
+        }
+
+        for flag in &self.unstable_flags {
+            out.push("-Z".to_owned());
+            out.push(flag.clone());
+        }
+
+        if let Some(path) = &self.manifest_path {
+            out.push("--manifest-path".to_owned());
+            out.push(path.clone());
+        }
+        if let Some(path) = &self.lockfile_path {
+            out.push("--lockfile-path".to_owned());
+            out.push(path.clone());
+        }
+        if self.locked {
+            out.push("--locked".to_owned());
+        }
+        if self.offline {
+            out.push("--offline".to_owned());
+        }
+        if self.frozen {
+            out.push("--frozen".to_owned());
+        }
+
+        out
+    }
 }
