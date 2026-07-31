@@ -35,6 +35,10 @@ pub struct FixitArgs {
     #[arg(long)]
     broken_code: bool,
 
+    /// Fix all targets together, risking stale suggestions
+    #[arg(long = "Zdangerous-parallel-fixes")]
+    dangerous_parallel_fixes: bool,
+
     #[command(flatten)]
     color: colorchoice_clap::Color,
 
@@ -88,7 +92,11 @@ fn fix(
 
     let mut last_errors = IndexMap::new();
     let mut claimed_files: HashMap<same_file::Handle, BuildUnit> = HashMap::new();
-    let mut package_graph = PackageGraph::load(&args.check_flags);
+    let mut package_graph = if args.dangerous_parallel_fixes {
+        None
+    } else {
+        PackageGraph::load(&args.check_flags)
+    };
     let mut seen = HashSet::new();
 
     loop {
@@ -237,12 +245,12 @@ fn fix(
 
                 seen.insert(build_unit);
             } else if !file_map.is_empty() {
-                if continuing_batch && !active_targets.contains_key(&build_unit) {
+                let was_active = active_targets.contains_key(&build_unit);
+                if continuing_batch && !was_active {
                     continue;
                 }
 
-                let was_active = active_targets.contains_key(&build_unit);
-                if !was_active && !active_targets.is_empty() {
+                if !args.dangerous_parallel_fixes && !was_active && !active_targets.is_empty() {
                     let Some(graph) = package_graph.as_mut() else {
                         continue;
                     };
