@@ -1,11 +1,14 @@
-use std::{
-    collections::HashSet,
-    env,
-    io::{BufRead, BufReader, Cursor},
-    path::Path,
-    process::Stdio,
-};
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::env;
+use std::io::BufRead;
+use std::io::BufReader;
+use std::io::Cursor;
+use std::path::Path;
+use std::process::Command;
+use std::process::Stdio;
 
+use cargo_metadata::MetadataCommand;
 use cargo_util::paths;
 use clap::Parser;
 use indexmap::{IndexMap, IndexSet};
@@ -84,18 +87,19 @@ fn fix(
     let mut lint_cap = false;
 
     let mut last_errors = IndexMap::new();
-    let mut current_target: Option<BuildUnit> = None;
+    let mut claimed_files: HashMap<same_file::Handle, BuildUnit> = HashMap::new();
+    let mut package_graph = PackageGraph::load(&args.check_flags);
     let mut seen = HashSet::new();
 
     loop {
         trace!("iteration={iteration}");
-        trace!("current_target={current_target:?}");
+        trace!("active_targets={active_targets:?}");
         let (messages, exit_code) = check(args, &mut lint_cap)?;
 
         if !args.broken_code && exit_code != Some(0) {
             let mut out = String::new();
 
-            if current_target.is_some() {
+            if !active_targets.is_empty() {
                 out.push_str(
                     "failed to automatically apply fixes suggested by rustc\n\n\
                     after fixes were automatically applied the \
@@ -168,7 +172,11 @@ fn fix(
         let (mut errors, mut build_unit_map) = collect_errors(messages.into_iter(), &seen);
 
         if iteration >= max_iterations {
-            if let Some(target) = current_target {
+            if active_targets.is_empty() {
+                break;
+            }
+            let targets: Vec<_> = active_targets.keys().cloned().collect();
+            for target in targets {
                 if let Some(file_map) = build_unit_map.get(&target) {
                     let target_errors = errors.entry(target.clone()).or_default();
                     target_errors.extend(
@@ -179,25 +187,32 @@ fn fix(
                     );
                 }
                 finish_target(target, active_targets, &mut errors, &mut seen)?;
-                current_target = None;
-                iteration = 0;
-            } else {
-                break;
             }
+            claimed_files.clear();
+            iteration = 0;
         }
 
-        let mut finalized_target = false;
-        if let Some(target) = current_target.as_ref() {
-            if build_unit_map.get(target).is_none_or(IndexMap::is_empty) {
-                let target = current_target.take().expect("current target is present");
+        let mut finalized_targets = false;
+        if !active_targets.is_empty()
+            && active_targets
+                .keys()
+                .all(|target| build_unit_map.get(target).is_none_or(IndexMap::is_empty))
+        {
+            let targets: Vec<_> = active_targets.keys().cloned().collect();
+            for target in targets {
                 build_unit_map.shift_remove(&target);
                 finish_target(target, active_targets, &mut errors, &mut seen)?;
-                iteration = 0;
-                finalized_target = true;
             }
+            debug_assert!(active_targets.is_empty());
+            claimed_files.clear();
+            iteration = 0;
+            finalized_targets = true;
         }
 
         let mut made_changes = false;
+        // Admit build units from one compiler snapshot only when their packages are independent.
+        // Once a batch is active, recheck and finish it before considering additional units.
+        let continuing_batch = !active_targets.is_empty();
 
         for (build_unit, file_map) in build_unit_map {
             if seen.contains(&build_unit) {
@@ -208,8 +223,8 @@ fn fix(
                 .entry(build_unit.clone())
                 .or_insert_with(IndexSet::new);
 
-            if current_target.is_none() && file_map.is_empty() {
-                if finalized_target && build_unit_errors.is_empty() {
+            if active_targets.is_empty() && file_map.is_empty() {
+                if finalized_targets && build_unit_errors.is_empty() {
                     continue;
                 }
                 if seen.iter().all(|b| b.package_id != build_unit.package_id) {
@@ -221,33 +236,86 @@ fn fix(
                 errors.shift_remove(&build_unit);
 
                 seen.insert(build_unit);
-            } else if !file_map.is_empty()
-                && current_target.get_or_insert(build_unit.clone()) == &build_unit
-            {
+            } else if !file_map.is_empty() {
+                if continuing_batch && !active_targets.contains_key(&build_unit) {
+                    continue;
+                }
+
+                let was_active = active_targets.contains_key(&build_unit);
+                if !was_active && !active_targets.is_empty() {
+                    let Some(graph) = package_graph.as_mut() else {
+                        continue;
+                    };
+
+                    let mut independent = true;
+                    for active in active_targets.keys() {
+                        if !graph
+                            .packages_are_independent(&active.package_id, &build_unit.package_id)
+                        {
+                            independent = false;
+                            break;
+                        }
+                    }
+                    if !independent {
+                        continue;
+                    }
+                }
+
+                let handles = file_map
+                    .keys()
+                    .map(same_file::Handle::from_path)
+                    .collect::<Result<Vec<_>, _>>()
+                    .ok();
+                let serialize_target = handles.is_none();
+                if serialize_target && !was_active && !active_targets.is_empty() {
+                    continue;
+                }
+                if handles.as_ref().is_some_and(|handles| {
+                    handles.iter().any(|handle| {
+                        claimed_files
+                            .get(handle)
+                            .is_some_and(|owner| owner != &build_unit)
+                    })
+                }) {
+                    continue;
+                }
+
                 let target_files = active_targets.entry(build_unit.clone()).or_default();
-                if fix_errors(target_files, file_map, build_unit_errors)? {
-                    made_changes = true;
-                    break;
-                } else if target_files.is_empty() {
+                let changed = fix_errors(target_files, file_map, build_unit_errors)?;
+                if !changed && !was_active {
                     active_targets.shift_remove(&build_unit);
+                }
+                if changed {
+                    if let Some(handles) = handles {
+                        for handle in handles {
+                            claimed_files.entry(handle).or_insert(build_unit.clone());
+                        }
+                    }
+                    made_changes = true;
+                    if serialize_target {
+                        break;
+                    }
                 }
             }
         }
 
         trace!("made_changes={made_changes:?}");
-        trace!("current_target={current_target:?}");
+        trace!("active_targets={active_targets:?}");
 
         last_errors = errors;
         iteration += 1;
 
         if !made_changes {
-            if let Some(pkg) = current_target {
-                finish_target(pkg, active_targets, &mut last_errors, &mut seen)?;
-                current_target = None;
-                iteration = 0;
-                continue;
+            if active_targets.is_empty() {
+                break;
             }
-            break;
+            let targets: Vec<_> = active_targets.keys().cloned().collect();
+            for target in targets {
+                finish_target(target, active_targets, &mut last_errors, &mut seen)?;
+            }
+            claimed_files.clear();
+            iteration = 0;
+            continue;
         }
     }
 
@@ -263,6 +331,87 @@ fn fix(
 
     active_targets.clear();
     Ok(())
+}
+
+/// Resolved package dependencies used to batch only transitively unrelated packages.
+#[derive(Debug)]
+struct PackageGraph {
+    dependencies: HashMap<String, Vec<String>>,
+    reachable: HashMap<String, HashSet<String>>,
+}
+
+impl PackageGraph {
+    /// Loads the package graph, returning `None` when batching must remain serial.
+    fn load(flags: &CheckFlags) -> Option<Self> {
+        let mut command = MetadataCommand::new();
+        command.other_options(flags.to_metadata_flags());
+
+        let metadata = match command.exec() {
+            Ok(metadata) => metadata,
+            Err(error) => {
+                warn!("failed to run `cargo metadata`: {error}");
+                return None;
+            }
+        };
+        let Some(resolve) = metadata.resolve else {
+            warn!("`cargo metadata` did not return a dependency graph");
+            return None;
+        };
+        let dependencies = resolve
+            .nodes
+            .into_iter()
+            .map(|node| {
+                (
+                    node.id.repr,
+                    node.dependencies
+                        .into_iter()
+                        .map(|dependency| dependency.repr)
+                        .collect(),
+                )
+            })
+            .collect();
+
+        Some(Self {
+            dependencies,
+            reachable: HashMap::new(),
+        })
+    }
+
+    /// Returns whether both packages are known and transitively unrelated.
+    fn packages_are_independent(&mut self, left: &str, right: &str) -> bool {
+        left != right && !self.depends_on(left, right) && !self.depends_on(right, left)
+    }
+
+    /// Returns whether `package` transitively depends on `target`.
+    fn depends_on(&mut self, package: &str, target: &str) -> bool {
+        if !self.reachable.contains_key(package) {
+            let Some(reachable) = self.collect_reachable(package) else {
+                return true;
+            };
+            self.reachable.insert(package.to_owned(), reachable);
+        }
+
+        self.reachable
+            .get(package)
+            .is_none_or(|reachable| reachable.contains(target))
+    }
+
+    /// Collects the packages transitively reachable from `root`.
+    fn collect_reachable(&self, root: &str) -> Option<HashSet<String>> {
+        let mut reachable = HashSet::new();
+        let mut pending = vec![root];
+
+        while let Some(package) = pending.pop() {
+            if !reachable.insert(package.to_owned()) {
+                continue;
+            }
+            let dependencies = self.dependencies.get(package)?;
+            pending.extend(dependencies.iter().map(String::as_str));
+        }
+
+        reachable.remove(root);
+        Some(reachable)
+    }
 }
 
 /// Marks a target complete after reporting its fixes and remaining diagnostics.
@@ -297,7 +446,7 @@ fn finish_target(
 
 fn check(args: &FixitArgs, lint_cap: &mut bool) -> CargoResult<(Vec<CheckOutput>, Option<i32>)> {
     let cmd = if args.clippy { "clippy" } else { "check" };
-    let mut command = std::process::Command::new(env!("CARGO"));
+    let mut command = Command::new(env!("CARGO"));
     command
         .args([cmd, "--message-format", "json-diagnostic-rendered-ansi"])
         .args(args.check_flags.to_flags())
@@ -319,7 +468,7 @@ fn check(args: &FixitArgs, lint_cap: &mut bool) -> CargoResult<(Vec<CheckOutput>
 }
 
 /// Applies the original lint cap while preserving existing compiler flags.
-fn cap_lints(command: &mut std::process::Command) {
+fn cap_lints(command: &mut Command) {
     if let Ok(flags) = env::var("CARGO_ENCODED_RUSTFLAGS") {
         let separator = if flags.is_empty() { "" } else { "\u{1f}" };
         command.env(
