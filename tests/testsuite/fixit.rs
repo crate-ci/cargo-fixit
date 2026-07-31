@@ -282,6 +282,80 @@ fn fixable_and_unfixable() {
     );
 }
 
+#[cfg(unix)]
+#[cargo_test]
+fn retains_prior_writes_when_later_write_fails() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let original_lib = "mod module;\npub fn lib() { let mut value = 1; let _ = value; }\n";
+    let original_module = "pub fn module() { let mut value = 1; let _ = value; }\n";
+    let p = project()
+        .file("Cargo.toml", &basic_manifest("foo", "0.1.0"))
+        .file("src/lib.rs", original_lib)
+        .file("src/module.rs", original_module)
+        .build();
+
+    let unwritable = p.root().join("src/lib.rs");
+    std::fs::set_permissions(&unwritable, std::fs::Permissions::from_mode(0o444)).unwrap();
+
+    p.cargo_("fixit --allow-no-vcs")
+        .with_status(101)
+        .with_stderr_data(str![[r#"
+[ERROR] failed to write `src/lib.rs`: [..]
+
+"#]])
+        .run();
+
+    std::fs::set_permissions(&unwritable, std::fs::Permissions::from_mode(0o644)).unwrap();
+    assert_eq!(p.read_file("src/lib.rs"), original_lib);
+    assert_eq!(
+        p.read_file("src/module.rs"),
+        "pub fn module() { let value = 1; let _ = value; }\n"
+    );
+}
+
+#[cfg(unix)]
+#[cargo_test]
+fn retains_completed_target_when_later_write_fails() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let original_a = "pub fn a() -> i32 { let mut value = 1; value }\n";
+    let original_b = "pub fn b() -> i32 { let mut value = a::a(); value }\n";
+    let p = project()
+        .file(
+            "Cargo.toml",
+            "[workspace]\nmembers = [\"a\", \"b\"]\nresolver = \"2\"\n",
+        )
+        .file("a/Cargo.toml", &basic_manifest("a", "0.1.0"))
+        .file("a/src/lib.rs", original_a)
+        .file(
+            "b/Cargo.toml",
+            "[package]\nname = \"b\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\na = { path = \"../a\" }\n",
+        )
+        .file("b/src/lib.rs", original_b)
+        .build();
+
+    let unwritable = p.root().join("b/src/lib.rs");
+    std::fs::set_permissions(&unwritable, std::fs::Permissions::from_mode(0o444)).unwrap();
+
+    p.cargo_("fixit --workspace --allow-no-vcs")
+        .with_status(101)
+        .with_stderr_data(str![[r#"
+[CHECKING] a v0.1.0
+[FIXED] a/src/lib.rs (1 fix)
+[ERROR] failed to write `b/src/lib.rs`: [..]
+
+"#]])
+        .run();
+
+    std::fs::set_permissions(&unwritable, std::fs::Permissions::from_mode(0o644)).unwrap();
+    assert_eq!(
+        p.read_file("a/src/lib.rs"),
+        "pub fn a() -> i32 { let value = 1; value }\n"
+    );
+    assert_eq!(p.read_file("b/src/lib.rs"), original_b);
+}
+
 #[cargo_test]
 fn dependency_order() {
     let p = project()
