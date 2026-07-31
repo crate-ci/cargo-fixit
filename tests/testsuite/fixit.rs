@@ -119,13 +119,13 @@ fn preserves_workspace_fingerprints_without_denied_warnings() {
 
     p.cargo_("check").run();
 
-    let fingerprints_before = package_fingerprints(&p, &["foo-", "cached-dependency-"]);
+    let fingerprints_before = package_fingerprints(&p, &["foo", "cached-dependency"]);
     assert_eq!(fingerprints_before.len(), 2);
 
     p.cargo_("fixit --allow-no-vcs").run();
 
     assert_eq!(
-        package_fingerprints(&p, &["foo-", "cached-dependency-"]),
+        package_fingerprints(&p, &["foo", "cached-dependency"]),
         fingerprints_before
     );
 }
@@ -157,13 +157,13 @@ fn clippy_preserves_workspace_fingerprints_without_denied_warnings() {
 
     p.cargo_("clippy --workspace").run();
 
-    let fingerprints_before = package_fingerprints(&p, &["app-", "cached-dependency-"]);
+    let fingerprints_before = package_fingerprints(&p, &["app", "cached-dependency"]);
     assert_eq!(fingerprints_before.len(), 2);
 
     p.cargo_("fixit --clippy --workspace --allow-no-vcs").run();
 
     assert_eq!(
-        package_fingerprints(&p, &["app-", "cached-dependency-"]),
+        package_fingerprints(&p, &["app", "cached-dependency"]),
         fingerprints_before
     );
 }
@@ -199,27 +199,33 @@ fn fixes_denied_lints_with_compiler_error_codes() {
 }
 
 fn package_fingerprints(project: &Project, packages: &[&str]) -> Vec<(String, Vec<u8>)> {
-    let mut fingerprints = std::fs::read_dir(project.build_dir().join("debug/.fingerprint"))
-        .unwrap()
-        .map(Result::unwrap)
-        .filter(|entry| {
-            let name = entry.file_name();
-            packages
-                .iter()
-                .any(|package| name.to_string_lossy().starts_with(package))
-        })
-        .map(|entry| {
-            let dep_info = std::fs::read_dir(entry.path())
-                .unwrap()
-                .map(Result::unwrap)
-                .find(|file| file.file_name().to_string_lossy().starts_with("dep-lib-"))
-                .unwrap();
-            (
-                entry.file_name().to_string_lossy().into_owned(),
-                std::fs::read(dep_info.path()).unwrap(),
-            )
-        })
+    let root = project.build_dir().join("debug");
+    let dep_infos = packages
+        .iter()
+        .map(|package| format!("dep-lib-{}", package.replace('-', "_")))
         .collect::<Vec<_>>();
+    let mut directories = vec![root.clone()];
+    let mut fingerprints = Vec::new();
+
+    while let Some(directory) = directories.pop() {
+        for entry in std::fs::read_dir(directory).unwrap().map(Result::unwrap) {
+            if entry.file_type().unwrap().is_dir() {
+                directories.push(entry.path());
+            } else if dep_infos
+                .iter()
+                .any(|dep_info| entry.file_name() == std::ffi::OsStr::new(dep_info))
+            {
+                let path = entry.path();
+                fingerprints.push((
+                    path.strip_prefix(&root)
+                        .unwrap()
+                        .to_string_lossy()
+                        .into_owned(),
+                    std::fs::read(path).unwrap(),
+                ));
+            }
+        }
+    }
     fingerprints.sort_unstable();
     fingerprints
 }
