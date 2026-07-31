@@ -119,13 +119,13 @@ fn preserves_workspace_fingerprints_without_denied_warnings() {
 
     p.cargo_("check").run();
 
-    let fingerprints_before = package_fingerprints(&p, &["foo-", "cached-dependency-"]);
+    let fingerprints_before = package_fingerprints(&p, &["foo", "cached-dependency"]);
     assert_eq!(fingerprints_before.len(), 2);
 
     p.cargo_("fixit --allow-no-vcs").run();
 
     assert_eq!(
-        package_fingerprints(&p, &["foo-", "cached-dependency-"]),
+        package_fingerprints(&p, &["foo", "cached-dependency"]),
         fingerprints_before
     );
 }
@@ -157,13 +157,13 @@ fn clippy_preserves_workspace_fingerprints_without_denied_warnings() {
 
     p.cargo_("clippy --workspace").run();
 
-    let fingerprints_before = package_fingerprints(&p, &["app-", "cached-dependency-"]);
+    let fingerprints_before = package_fingerprints(&p, &["app", "cached-dependency"]);
     assert_eq!(fingerprints_before.len(), 2);
 
     p.cargo_("fixit --clippy --workspace --allow-no-vcs").run();
 
     assert_eq!(
-        package_fingerprints(&p, &["app-", "cached-dependency-"]),
+        package_fingerprints(&p, &["app", "cached-dependency"]),
         fingerprints_before
     );
 }
@@ -199,27 +199,33 @@ fn fixes_denied_lints_with_compiler_error_codes() {
 }
 
 fn package_fingerprints(project: &Project, packages: &[&str]) -> Vec<(String, Vec<u8>)> {
-    let mut fingerprints = std::fs::read_dir(project.build_dir().join("debug/.fingerprint"))
-        .unwrap()
-        .map(Result::unwrap)
-        .filter(|entry| {
-            let name = entry.file_name();
-            packages
-                .iter()
-                .any(|package| name.to_string_lossy().starts_with(package))
-        })
-        .map(|entry| {
-            let dep_info = std::fs::read_dir(entry.path())
-                .unwrap()
-                .map(Result::unwrap)
-                .find(|file| file.file_name().to_string_lossy().starts_with("dep-lib-"))
-                .unwrap();
-            (
-                entry.file_name().to_string_lossy().into_owned(),
-                std::fs::read(dep_info.path()).unwrap(),
-            )
-        })
+    let root = project.build_dir().join("debug");
+    let dep_infos = packages
+        .iter()
+        .map(|package| format!("dep-lib-{}", package.replace('-', "_")))
         .collect::<Vec<_>>();
+    let mut directories = vec![root.clone()];
+    let mut fingerprints = Vec::new();
+
+    while let Some(directory) = directories.pop() {
+        for entry in std::fs::read_dir(directory).unwrap().map(Result::unwrap) {
+            if entry.file_type().unwrap().is_dir() {
+                directories.push(entry.path());
+            } else if dep_infos
+                .iter()
+                .any(|dep_info| entry.file_name() == std::ffi::OsStr::new(dep_info))
+            {
+                let path = entry.path();
+                fingerprints.push((
+                    path.strip_prefix(&root)
+                        .unwrap()
+                        .to_string_lossy()
+                        .into_owned(),
+                    std::fs::read(path).unwrap(),
+                ));
+            }
+        }
+    }
     fingerprints.sort_unstable();
     fingerprints
 }
@@ -274,6 +280,77 @@ fn fixable_and_unfixable() {
             
 "#]],
     );
+}
+
+#[cfg(unix)]
+#[cargo_test]
+fn restores_prior_writes_when_later_write_fails() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let original_lib = "mod module;\npub fn lib() { let mut value = 1; let _ = value; }\n";
+    let original_module = "pub fn module() { let mut value = 1; let _ = value; }\n";
+    let p = project()
+        .file("Cargo.toml", &basic_manifest("foo", "0.1.0"))
+        .file("src/lib.rs", original_lib)
+        .file("src/module.rs", original_module)
+        .build();
+
+    let unwritable = p.root().join("src/lib.rs");
+    std::fs::set_permissions(&unwritable, std::fs::Permissions::from_mode(0o444)).unwrap();
+
+    p.cargo_("fixit --allow-no-vcs")
+        .with_status(101)
+        .with_stderr_data(str![[r#"
+[ERROR] failed to write `src/lib.rs`: [..]
+
+"#]])
+        .run();
+
+    std::fs::set_permissions(&unwritable, std::fs::Permissions::from_mode(0o644)).unwrap();
+    assert_eq!(p.read_file("src/lib.rs"), original_lib);
+    assert_eq!(p.read_file("src/module.rs"), original_module);
+}
+
+#[cfg(unix)]
+#[cargo_test]
+fn retains_completed_target_when_later_write_fails() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let original_a = "pub fn a() -> i32 { let mut value = 1; value }\n";
+    let original_b = "pub fn b() -> i32 { let mut value = a::a(); value }\n";
+    let p = project()
+        .file(
+            "Cargo.toml",
+            "[workspace]\nmembers = [\"a\", \"b\"]\nresolver = \"2\"\n",
+        )
+        .file("a/Cargo.toml", &basic_manifest("a", "0.1.0"))
+        .file("a/src/lib.rs", original_a)
+        .file(
+            "b/Cargo.toml",
+            "[package]\nname = \"b\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\na = { path = \"../a\" }\n",
+        )
+        .file("b/src/lib.rs", original_b)
+        .build();
+
+    let unwritable = p.root().join("b/src/lib.rs");
+    std::fs::set_permissions(&unwritable, std::fs::Permissions::from_mode(0o444)).unwrap();
+
+    p.cargo_("fixit --workspace --allow-no-vcs")
+        .with_status(101)
+        .with_stderr_data(str![[r#"
+[CHECKING] a v0.1.0
+[FIXED] a/src/lib.rs (1 fix)
+[ERROR] failed to write `b/src/lib.rs`: [..]
+
+"#]])
+        .run();
+
+    std::fs::set_permissions(&unwritable, std::fs::Permissions::from_mode(0o644)).unwrap();
+    assert_eq!(
+        p.read_file("a/src/lib.rs"),
+        "pub fn a() -> i32 { let value = 1; value }\n"
+    );
+    assert_eq!(p.read_file("b/src/lib.rs"), original_b);
 }
 
 #[cargo_test]
