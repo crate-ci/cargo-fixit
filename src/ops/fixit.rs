@@ -84,18 +84,17 @@ fn fix(
     let mut lint_cap = false;
 
     let mut last_errors = IndexMap::new();
-    let mut current_target: Option<BuildUnit> = None;
     let mut seen = HashSet::new();
 
     loop {
         trace!("iteration={iteration}");
-        trace!("current_target={current_target:?}");
+        trace!("active_targets={active_targets:?}");
         let (messages, exit_code) = check(args, &mut lint_cap)?;
 
         if !args.broken_code && exit_code != Some(0) {
             let mut out = String::new();
 
-            if current_target.is_some() {
+            if !active_targets.is_empty() {
                 out.push_str(
                     "failed to automatically apply fixes suggested by rustc\n\n\
                     after fixes were automatically applied the \
@@ -168,7 +167,11 @@ fn fix(
         let (mut errors, mut build_unit_map) = collect_errors(messages.into_iter(), &seen);
 
         if iteration >= max_iterations {
-            if let Some(target) = current_target {
+            if active_targets.is_empty() {
+                break;
+            }
+            let targets: Vec<_> = active_targets.keys().cloned().collect();
+            for target in targets {
                 if let Some(file_map) = build_unit_map.get(&target) {
                     let target_errors = errors.entry(target.clone()).or_default();
                     target_errors.extend(
@@ -179,22 +182,24 @@ fn fix(
                     );
                 }
                 finish_target(target, active_targets, &mut errors, &mut seen)?;
-                current_target = None;
-                iteration = 0;
-            } else {
-                break;
             }
+            iteration = 0;
         }
 
-        let mut finalized_target = false;
-        if let Some(target) = current_target.as_ref() {
-            if build_unit_map.get(target).is_none_or(IndexMap::is_empty) {
-                let target = current_target.take().expect("current target is present");
+        let mut finalized_targets = false;
+        if !active_targets.is_empty()
+            && active_targets
+                .keys()
+                .all(|target| build_unit_map.get(target).is_none_or(IndexMap::is_empty))
+        {
+            let targets: Vec<_> = active_targets.keys().cloned().collect();
+            for target in targets {
                 build_unit_map.shift_remove(&target);
                 finish_target(target, active_targets, &mut errors, &mut seen)?;
-                iteration = 0;
-                finalized_target = true;
             }
+            debug_assert!(active_targets.is_empty());
+            iteration = 0;
+            finalized_targets = true;
         }
 
         let mut made_changes = false;
@@ -208,8 +213,8 @@ fn fix(
                 .entry(build_unit.clone())
                 .or_insert_with(IndexSet::new);
 
-            if current_target.is_none() && file_map.is_empty() {
-                if finalized_target && build_unit_errors.is_empty() {
+            if active_targets.is_empty() && file_map.is_empty() {
+                if finalized_targets && build_unit_errors.is_empty() {
                     continue;
                 }
                 if seen.iter().all(|b| b.package_id != build_unit.package_id) {
@@ -222,32 +227,32 @@ fn fix(
 
                 seen.insert(build_unit);
             } else if !file_map.is_empty()
-                && current_target.get_or_insert(build_unit.clone()) == &build_unit
+                && (active_targets.is_empty() || active_targets.contains_key(&build_unit))
             {
                 let target_files = active_targets.entry(build_unit.clone()).or_default();
                 if fix_errors(target_files, file_map, build_unit_errors)? {
                     made_changes = true;
                     break;
-                } else if target_files.is_empty() {
-                    active_targets.shift_remove(&build_unit);
                 }
             }
         }
 
         trace!("made_changes={made_changes:?}");
-        trace!("current_target={current_target:?}");
+        trace!("active_targets={active_targets:?}");
 
         last_errors = errors;
         iteration += 1;
 
         if !made_changes {
-            if let Some(pkg) = current_target {
-                finish_target(pkg, active_targets, &mut last_errors, &mut seen)?;
-                current_target = None;
-                iteration = 0;
-                continue;
+            if active_targets.is_empty() {
+                break;
             }
-            break;
+            let targets: Vec<_> = active_targets.keys().cloned().collect();
+            for target in targets {
+                finish_target(target, active_targets, &mut last_errors, &mut seen)?;
+            }
+            iteration = 0;
+            continue;
         }
     }
 
