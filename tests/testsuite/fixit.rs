@@ -474,6 +474,21 @@ fn dependency_graph_batches_only_independent_packages() {
     let crate_invocations = crate::fix::rustc_invocations(&rustc_log, ["a", "b", "c", "d"]);
     // `c` and `d` share a batch, while `b` and then `a` wait for their dependencies.
     assert_eq!(crate_invocations, [4, 3, 2, 2]);
+
+    for package in ["a", "b", "c", "d"] {
+        p.change_file(format!("{package}/src/lib.rs"), "use std as foo;");
+    }
+    std::fs::remove_dir_all(&rustc_log).unwrap();
+    std::fs::create_dir_all(&rustc_log).unwrap();
+
+    p.cargo_("fixit --allow-no-vcs --Zdangerous-parallel-fixes")
+        .env("RUSTC_WORKSPACE_WRAPPER", crate::fix::echo_wrapper())
+        .env("__CARGO_FIXIT_RUSTC_LOG", &rustc_log)
+        .with_status(0)
+        .run();
+
+    let crate_invocations = crate::fix::rustc_invocations(&rustc_log, ["a", "b", "c", "d"]);
+    assert_eq!(crate_invocations, [2, 2, 2, 2]);
 }
 
 #[cargo_test]
