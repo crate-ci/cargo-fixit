@@ -181,7 +181,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-fixit"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "anstream",
  "anyhow",
