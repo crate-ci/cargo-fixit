@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Performance
+
+- Reduce oerhead of `cargo metadata`, where possible
+
+### Fies
+
+- Resolve `cargo` at runtime
+
 ## [0.1.10] - 2026-08-01
 
 ### Performance
