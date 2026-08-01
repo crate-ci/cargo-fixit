@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Performance
+
+- Avoid `cargo metadata`, where possible
+
 ## [0.1.9] - 2026-08-01
 
 ### Features
