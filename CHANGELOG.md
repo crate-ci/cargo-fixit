@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Performance
 
-- Batch parallel packages with non-overlappin fixes
+- Batch parallel packages with non-overlapping fixes
 
 ### Fixes
 
