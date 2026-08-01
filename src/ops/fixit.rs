@@ -92,11 +92,7 @@ fn fix(
 
     let mut last_errors = IndexMap::new();
     let mut claimed_files: HashMap<same_file::Handle, BuildUnit> = HashMap::new();
-    let mut package_graph = if args.dangerous_parallel_fixes {
-        None
-    } else {
-        PackageGraph::load(&args.check_flags)
-    };
+    let mut package_graph_cache: Option<Option<PackageGraph>> = None;
     let mut seen = HashSet::new();
 
     loop {
@@ -251,7 +247,17 @@ fn fix(
                 }
 
                 if !args.dangerous_parallel_fixes && !was_active && !active_targets.is_empty() {
-                    let Some(graph) = package_graph.as_mut() else {
+                    if active_targets
+                        .keys()
+                        .any(|active| active.package_id == build_unit.package_id)
+                    {
+                        continue;
+                    }
+
+                    if package_graph_cache.is_none() {
+                        package_graph_cache = Some(PackageGraph::load(&args.check_flags));
+                    }
+                    let Some(Some(graph)) = package_graph_cache.as_mut() else {
                         continue;
                     };
 

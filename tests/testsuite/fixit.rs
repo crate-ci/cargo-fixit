@@ -41,6 +41,40 @@ fn basic() {
 }
 
 #[cargo_test]
+fn single_package_skips_dependency_metadata() {
+    let p = project()
+        .file(
+            "src/lib.rs",
+            "pub fn sample() { let mut value = 1; let _ = value; }\n",
+        )
+        .file(
+            "src/main.rs",
+            "fn main() { let mut value = 1; let _ = value; }\n",
+        )
+        .build();
+
+    let mut command = cargo_test_support::process(env!("CARGO_BIN_EXE_cargo-fixit"));
+    command.cwd(p.root());
+    command.arg("fixit");
+    command.arg("--allow-no-vcs");
+    command.env("CARGO", p.root().join("metadata-must-not-run"));
+    command.env("FIXIT_LOG", "cargo_fixit=warn");
+
+    cargo_test_support::execs()
+        .with_process_builder(command)
+        .with_stderr_data(str![[r#"
+[CHECKING] foo v0.0.1
+[FIXED] src/lib.rs (1 fix)
+[FIXED] src/main.rs (1 fix)
+
+"#]])
+        .run();
+
+    assert!(!p.read_file("src/lib.rs").contains("let mut value"));
+    assert!(!p.read_file("src/main.rs").contains("let mut value"));
+}
+
+#[cargo_test]
 fn fixes_denied_warnings_with_encoded_rustflags() {
     let p = denied_warnings_project();
 
