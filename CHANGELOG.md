@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Features
+
+- Add `--Zdangerous-parallel-fixes` for running everything in parallel
+
+### Performance
+
+- Batch parallel packages with non-overlappin fixes
+
+### Fixes
+
+- Rollback on unexpected errors
+- Detect empty intent-to-add files
+
 ## [0.1.8] - 2026-07-30
 
 ### Performance
