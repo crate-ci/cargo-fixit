@@ -63,7 +63,11 @@ fn cargo_env() {
 
     assert_ui().eq(
         p.read_file("fake-cargo-called"),
-        str![[r#"not called"#]],
+        str![[r#"
+check
+--message-format
+json-diagnostic-rendered-ansi
+"#]],
     );
 }
 

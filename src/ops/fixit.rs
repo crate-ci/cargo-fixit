@@ -460,7 +460,8 @@ fn finish_target(
 
 fn check(args: &FixitArgs, lint_cap: &mut bool) -> CargoResult<(Vec<CheckOutput>, Option<i32>)> {
     let cmd = if args.clippy { "clippy" } else { "check" };
-    let mut command = Command::new(env!("CARGO"));
+    let cargo = env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+    let mut command = Command::new(cargo);
     command
         .args([cmd, "--message-format", "json-diagnostic-rendered-ansi"])
         .args(args.check_flags.to_flags())
