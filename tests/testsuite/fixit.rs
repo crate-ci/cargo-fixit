@@ -1,7 +1,10 @@
+use cargo_test_support::Project;
+use cargo_test_support::basic_manifest;
 use cargo_test_support::cargo_test;
-use cargo_test_support::{basic_manifest, compare::assert_ui, project, Project};
-use snapbox::str;
+use cargo_test_support::compare::assert_ui;
+use cargo_test_support::project;
 use snapbox::IntoData as _;
+use snapbox::str;
 
 use crate::fix::FixitProject;
 
@@ -459,9 +462,15 @@ fn independent_workspace_packages() {
             "[workspace]\nmembers = [\"a\", \"b\"]\nresolver = \"2\"\n",
         )
         .file("a/Cargo.toml", &basic_manifest("a", "0.1.0"))
-        .file("a/src/lib.rs", "pub fn a() { let mut value = 1; let _ = value; }\n")
+        .file(
+            "a/src/lib.rs",
+            "pub fn a() { let mut value = 1; let _ = value; }\n",
+        )
         .file("b/Cargo.toml", &basic_manifest("b", "0.1.0"))
-        .file("b/src/lib.rs", "pub fn b() { let mut value = 1; let _ = value; }\n")
+        .file(
+            "b/src/lib.rs",
+            "pub fn b() { let mut value = 1; let _ = value; }\n",
+        )
         .build();
 
     p.cargo_("fixit --workspace --allow-no-vcs")
@@ -594,6 +603,213 @@ fn dependency_graph_batches_only_independent_packages() {
 
     let crate_invocations = crate::fix::rustc_invocations(&rustc_log, ["a", "b", "c", "d"]);
     assert_eq!(crate_invocations, [2, 2, 2, 2]);
+}
+
+#[cfg(unix)]
+#[cargo_test]
+fn workspace_dependency_graph_uses_unresolved_metadata() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let p = project()
+        .file(
+            "Cargo.toml",
+            "[workspace]\nmembers = ['a', 'b']\nresolver = '2'\n",
+        )
+        .file("a/Cargo.toml", &basic_manifest("a", "0.1.0"))
+        .file(
+            "a/src/lib.rs",
+            "pub fn a() { let mut value = 1; let _ = value; }\n",
+        )
+        .file("b/Cargo.toml", &basic_manifest("b", "0.1.0"))
+        .file(
+            "b/src/lib.rs",
+            "pub fn b() { let mut value = 1; let _ = value; }\n",
+        )
+        .file(
+            "metadata-wrapper.sh",
+            r#"#!/bin/sh
+printf '%s\n' "$*" >> "$FIXIT_METADATA_LOG"
+if [ "$1" != metadata ] || [ "$4" != --no-deps ]; then
+    exit 41
+fi
+exec "$FIXIT_REAL_CARGO" "$@"
+"#,
+        )
+        .build();
+
+    let wrapper = p.root().join("metadata-wrapper.sh");
+    std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let metadata_log = p.root().join("metadata.log");
+    let rustc_log = p.root().join("rustc.log");
+    std::fs::create_dir_all(&rustc_log).unwrap();
+
+    p.cargo_("build --workspace").run();
+    let mut command = cargo_test_support::process(env!("CARGO_BIN_EXE_cargo-fixit"));
+    command.cwd(p.root());
+    command.arg("fixit");
+    command.arg("--workspace");
+    command.arg("--allow-no-vcs");
+    command.env("CARGO", &wrapper);
+    command.env("FIXIT_REAL_CARGO", env!("CARGO"));
+    command.env("FIXIT_METADATA_LOG", &metadata_log);
+    command.env("RUSTC_WORKSPACE_WRAPPER", crate::fix::echo_wrapper());
+    command.env("__CARGO_FIXIT_RUSTC_LOG", &rustc_log);
+    cargo_test_support::execs()
+        .with_process_builder(command)
+        .run();
+
+    assert_ui().eq(
+        p.read_file("metadata.log").trim_end(),
+        str![[r#"
+metadata --format-version 1 --no-deps
+"#]],
+    );
+    assert_eq!(
+        crate::fix::rustc_invocations(&rustc_log, ["a", "b"]),
+        [2, 2]
+    );
+}
+
+#[cfg(unix)]
+#[cargo_test(nightly, reason = "-Zscript is unstable")]
+fn cargo_script_falls_back_to_resolved_metadata() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let p = project()
+        .file("Cargo.toml", &basic_manifest("dep", "0.1.0"))
+        .file(
+            "src/lib.rs",
+            "pub fn value() -> usize { let mut value = 1; value }\n",
+        )
+        .file(
+            "script.rs",
+            r#"---cargo
+[package]
+edition = "2024"
+
+[dependencies]
+dep = { path = "." }
+---
+
+fn main() {
+    let mut value = dep::value();
+    let _ = value;
+}
+"#,
+        )
+        .file(
+            "metadata-wrapper.sh",
+            r#"#!/bin/sh
+if [ "$1" = metadata ]; then
+    printf '%s\n' "$*" >> "$FIXIT_METADATA_LOG"
+fi
+exec "$FIXIT_REAL_CARGO" "$@"
+"#,
+        )
+        .build();
+
+    let wrapper = p.root().join("metadata-wrapper.sh");
+    std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let metadata_log = p.root().join("metadata.log");
+
+    let mut command = cargo_test_support::process(env!("CARGO_BIN_EXE_cargo-fixit"));
+    command.cwd(p.root());
+    command.arg("fixit");
+    command.args(&["-Z", "script"]);
+    command.args(&["--manifest-path", "script.rs"]);
+    command.arg("--allow-no-vcs");
+    command.env(
+        "__CARGO_TEST_CHANNEL_OVERRIDE_DO_NOT_USE_THIS",
+        "nightly",
+    );
+    command.env("CARGO", &wrapper);
+    command.env("CARGO_ENCODED_RUSTFLAGS", "--cap-lints=warn");
+    command.env("FIXIT_REAL_CARGO", env!("CARGO"));
+    command.env("FIXIT_METADATA_LOG", &metadata_log);
+    command.env("RUSTC_BOOTSTRAP", "1");
+    cargo_test_support::execs()
+        .with_process_builder(command)
+        .run();
+
+    assert_ui().eq(
+        p.read_file("metadata.log").trim_end(),
+        str![[r#"
+metadata --format-version 1 --no-deps -Z script --manifest-path script.rs
+metadata --format-version 1 -Z script --manifest-path script.rs
+"#]],
+    );
+    assert!(!p.read_file("src/lib.rs").contains("let mut value"));
+    assert!(!p.read_file("script.rs").contains("let mut value"));
+}
+
+#[cfg(unix)]
+#[cargo_test]
+fn external_path_dependencies_fall_back_to_resolved_metadata() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let p = project()
+        .file(
+            "Cargo.toml",
+            "[workspace]\nmembers = ['consumer', 'provider']\nexclude = ['external']\nresolver = '2'\n",
+        )
+        .file(
+            "consumer/Cargo.toml",
+            &format!(
+                "{}\n[dependencies]\nexternal = {{ path = '../external' }}\n",
+                basic_manifest("consumer", "0.1.0")
+            ),
+        )
+        .file(
+            "consumer/src/lib.rs",
+            "pub fn consumer() -> usize { let mut value = external::value(); value }\n",
+        )
+        .file(
+            "external/Cargo.toml",
+            &format!(
+                "{}\n[dependencies]\nprovider = {{ path = '../provider' }}\n",
+                basic_manifest("external", "0.1.0")
+            ),
+        )
+        .file("external/src/lib.rs", "pub fn value() -> usize { provider::value() }\n")
+        .file("provider/Cargo.toml", &basic_manifest("provider", "0.1.0"))
+        .file(
+            "provider/src/lib.rs",
+            "pub fn value() -> usize { let mut value = 1; value }\n",
+        )
+        .file(
+            "metadata-wrapper.sh",
+            r#"#!/bin/sh
+printf '%s\n' "$*" >> "$FIXIT_METADATA_LOG"
+exec "$FIXIT_REAL_CARGO" "$@"
+"#,
+        )
+        .build();
+
+    let wrapper = p.root().join("metadata-wrapper.sh");
+    std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let metadata_log = p.root().join("metadata.log");
+
+    let mut command = cargo_test_support::process(env!("CARGO_BIN_EXE_cargo-fixit"));
+    command.cwd(p.root());
+    command.arg("fixit");
+    command.arg("--workspace");
+    command.arg("--allow-no-vcs");
+    command.env("CARGO", &wrapper);
+    command.env("FIXIT_REAL_CARGO", env!("CARGO"));
+    command.env("FIXIT_METADATA_LOG", &metadata_log);
+    cargo_test_support::execs()
+        .with_process_builder(command)
+        .run();
+
+    assert_ui().eq(
+        p.read_file("metadata.log").trim_end(),
+        str![[r#"
+metadata --format-version 1 --no-deps
+metadata --format-version 1
+"#]],
+    );
+    assert!(!p.read_file("consumer/src/lib.rs").contains("let mut value"));
+    assert!(!p.read_file("provider/src/lib.rs").contains("let mut value"));
 }
 
 #[cargo_test]
