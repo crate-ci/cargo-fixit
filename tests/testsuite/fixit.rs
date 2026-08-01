@@ -41,7 +41,36 @@ fn basic() {
 }
 
 #[cargo_test]
+fn cargo_env() {
+    let fake_cargo = fake_cargo();
+
+    let p = project()
+        .file("src/lib.rs", "pub fn sample() {}")
+        .file("fake-cargo-called", "not called")
+        .build();
+    let mut command = cargo_test_support::process(env!("CARGO_BIN_EXE_cargo-fixit"));
+    command.cwd(p.root());
+    command.arg("fixit");
+    command.arg("--allow-no-vcs");
+    command.env("CARGO", fake_cargo.bin("fake-cargo"));
+    command.env(
+        "CARGO_FIXIT_FAKE_CARGO_MARKER",
+        p.root().join("fake-cargo-called"),
+    );
+    cargo_test_support::execs()
+        .with_process_builder(command)
+        .run();
+
+    assert_ui().eq(
+        p.read_file("fake-cargo-called"),
+        str![[r#"not called"#]],
+    );
+}
+
+#[cargo_test]
 fn single_package_skips_dependency_metadata() {
+    let fake_cargo = fake_cargo();
+
     let p = project()
         .file(
             "src/lib.rs",
@@ -57,7 +86,8 @@ fn single_package_skips_dependency_metadata() {
     command.cwd(p.root());
     command.arg("fixit");
     command.arg("--allow-no-vcs");
-    command.env("CARGO", p.root().join("metadata-must-not-run"));
+    command.env("CARGO", fake_cargo.bin("fake-cargo"));
+    command.env("FIXIT_REAL_CARGO", env!("CARGO"));
     command.env("FIXIT_LOG", "cargo_fixit=warn");
 
     cargo_test_support::execs()
@@ -72,6 +102,43 @@ fn single_package_skips_dependency_metadata() {
 
     assert!(!p.read_file("src/lib.rs").contains("let mut value"));
     assert!(!p.read_file("src/main.rs").contains("let mut value"));
+}
+
+fn fake_cargo() -> Project {
+    let fake_cargo = project()
+        .at(cargo_test_support::paths::global_root().join("fake-cargo"))
+        .file("Cargo.toml", &basic_manifest("fake-cargo", "1.0.0"))
+        .file(
+            "src/main.rs",
+            r#"
+            fn main() {
+                let args = std::env::args_os().skip(1).collect::<Vec<_>>();
+                if args.first().is_some_and(|arg| arg == "metadata") {
+                    std::process::exit(1);
+                }
+
+                if let Some(marker) = std::env::var_os("CARGO_FIXIT_FAKE_CARGO_MARKER") {
+                    let args = args
+                        .iter()
+                        .map(|arg| arg.to_string_lossy())
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    std::fs::write(marker, args).unwrap();
+                } else {
+                    let cargo = std::env::var_os("FIXIT_REAL_CARGO").unwrap();
+                    let status = std::process::Command::new(cargo)
+                        .args(args)
+                        .env_remove("CARGO")
+                        .status()
+                        .unwrap();
+                    std::process::exit(status.code().unwrap_or(1));
+                }
+            }
+            "#,
+        )
+        .build();
+    fake_cargo.cargo_("build").run();
+    fake_cargo
 }
 
 #[cargo_test]
