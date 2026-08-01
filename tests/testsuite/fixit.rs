@@ -41,7 +41,7 @@ fn basic() {
 }
 
 #[cargo_test]
-fn single_package_loads_dependency_metadata() {
+fn single_package_skips_dependency_metadata() {
     let p = project()
         .file(
             "src/lib.rs",
@@ -63,7 +63,6 @@ fn single_package_loads_dependency_metadata() {
     cargo_test_support::execs()
         .with_process_builder(command)
         .with_stderr_data(str![[r#"
-[..] WARN cargo_fixit::ops::fixit: failed to run `cargo metadata`: [..]
 [CHECKING] foo v0.0.1
 [FIXED] src/lib.rs (1 fix)
 [FIXED] src/main.rs (1 fix)
