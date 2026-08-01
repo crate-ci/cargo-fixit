@@ -628,9 +628,11 @@ fn workspace_dependency_graph_uses_unresolved_metadata() {
         .file(
             "metadata-wrapper.sh",
             r#"#!/bin/sh
-printf '%s\n' "$*" >> "$FIXIT_METADATA_LOG"
-if [ "$1" != metadata ] || [ "$4" != --no-deps ]; then
-    exit 41
+if [ "$1" = metadata ]; then
+    printf '%s\n' "$*" >> "$FIXIT_METADATA_LOG"
+    if [ "$4" != --no-deps ]; then
+        exit 41
+    fi
 fi
 exec "$FIXIT_REAL_CARGO" "$@"
 "#,
@@ -779,7 +781,9 @@ fn external_path_dependencies_fall_back_to_resolved_metadata() {
         .file(
             "metadata-wrapper.sh",
             r#"#!/bin/sh
-printf '%s\n' "$*" >> "$FIXIT_METADATA_LOG"
+if [ "$1" = metadata ]; then
+    printf '%s\n' "$*" >> "$FIXIT_METADATA_LOG"
+fi
 exec "$FIXIT_REAL_CARGO" "$@"
 "#,
         )
