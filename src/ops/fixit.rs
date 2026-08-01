@@ -347,7 +347,7 @@ fn fix(
     Ok(())
 }
 
-/// Resolved package dependencies used to batch only transitively unrelated packages.
+/// Package dependencies used to batch only transitively unrelated packages.
 #[derive(Debug)]
 struct PackageGraph {
     dependencies: HashMap<String, Vec<String>>,
@@ -357,6 +357,70 @@ struct PackageGraph {
 impl PackageGraph {
     /// Loads the package graph, returning `None` when batching must remain serial.
     fn load(flags: &CheckFlags) -> Option<Self> {
+        let mut command = MetadataCommand::new();
+        command.no_deps();
+        command.other_options(flags.to_metadata_flags());
+
+        let metadata = match command.exec() {
+            Ok(metadata) => metadata,
+            Err(error) => {
+                warn!("failed to run `cargo metadata`: {error}");
+                return None;
+            }
+        };
+
+        // A script is identified by its manifest path, not its containing directory.
+        if metadata
+            .packages
+            .iter()
+            .any(|package| package.manifest_path.file_name() != Some("Cargo.toml"))
+        {
+            return Self::load_resolved(flags);
+        }
+
+        let package_ids_by_path: HashMap<_, _> = metadata
+            .packages
+            .iter()
+            .filter_map(|package| {
+                package
+                    .manifest_path
+                    .parent()
+                    .map(|path| (path, package.id.repr.as_str()))
+            })
+            .collect();
+        if package_ids_by_path.len() != metadata.packages.len() {
+            return Self::load_resolved(flags);
+        }
+
+        let package_names: HashSet<_> = metadata
+            .packages
+            .iter()
+            .map(|package| package.name.as_ref())
+            .collect();
+        let mut dependencies = HashMap::with_capacity(metadata.packages.len());
+        for package in &metadata.packages {
+            let mut package_dependencies = Vec::new();
+            for dependency in &package.dependencies {
+                if let Some(path) = &dependency.path {
+                    let Some(dependency_id) = package_ids_by_path.get(path.as_path()) else {
+                        return Self::load_resolved(flags);
+                    };
+                    package_dependencies.push((*dependency_id).to_owned());
+                } else if package_names.contains(dependency.name.as_str()) {
+                    return Self::load_resolved(flags);
+                }
+            }
+            dependencies.insert(package.id.repr.clone(), package_dependencies);
+        }
+
+        Some(Self {
+            dependencies,
+            reachable: HashMap::new(),
+        })
+    }
+
+    /// Resolves external packages when workspace metadata cannot prove independence.
+    fn load_resolved(flags: &CheckFlags) -> Option<Self> {
         let mut command = MetadataCommand::new();
         command.other_options(flags.to_metadata_flags());
 

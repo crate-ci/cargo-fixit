@@ -536,7 +536,7 @@ fn dependency_graph_batches_only_independent_packages() {
 
 #[cfg(unix)]
 #[cargo_test]
-fn workspace_dependency_graph_loads_metadata() {
+fn workspace_dependency_graph_uses_unresolved_metadata() {
     use std::os::unix::fs::PermissionsExt;
 
     let p = project()
@@ -558,7 +558,7 @@ fn workspace_dependency_graph_loads_metadata() {
             "metadata-wrapper.sh",
             r#"#!/bin/sh
 printf '%s\n' "$*" >> "$FIXIT_METADATA_LOG"
-if [ "$1" != metadata ] || [ "$4" = --no-deps ]; then
+if [ "$1" != metadata ] || [ "$4" != --no-deps ]; then
     exit 41
 fi
 exec "$FIXIT_REAL_CARGO" "$@"
@@ -590,7 +590,7 @@ exec "$FIXIT_REAL_CARGO" "$@"
     assert_ui().eq(
         p.read_file("metadata.log").trim_end(),
         str![[r#"
-metadata --format-version 1
+metadata --format-version 1 --no-deps
 "#]],
     );
     assert_eq!(
@@ -663,6 +663,7 @@ exec "$FIXIT_REAL_CARGO" "$@"
     assert_ui().eq(
         p.read_file("metadata.log").trim_end(),
         str![[r#"
+metadata --format-version 1 --no-deps -Z script --manifest-path script.rs
 metadata --format-version 1 -Z script --manifest-path script.rs
 "#]],
     );
@@ -672,7 +673,7 @@ metadata --format-version 1 -Z script --manifest-path script.rs
 
 #[cfg(unix)]
 #[cargo_test]
-fn external_path_dependencies_connect_workspace_members() {
+fn external_path_dependencies_fall_back_to_resolved_metadata() {
     use std::os::unix::fs::PermissionsExt;
 
     let p = project()
@@ -732,6 +733,7 @@ exec "$FIXIT_REAL_CARGO" "$@"
     assert_ui().eq(
         p.read_file("metadata.log").trim_end(),
         str![[r#"
+metadata --format-version 1 --no-deps
 metadata --format-version 1
 "#]],
     );
