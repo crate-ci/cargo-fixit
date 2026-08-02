@@ -194,6 +194,7 @@ dependencies = [
  "clap-cargo",
  "colorchoice-clap",
  "git2",
+ "glob",
  "indexmap",
  "log",
  "rustfix",

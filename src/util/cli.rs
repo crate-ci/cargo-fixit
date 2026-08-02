@@ -128,7 +128,29 @@ pub struct CheckFlags {
     frozen: bool,
 }
 
+/// Package selectors that determine which workspace packages Cargo treats as primary.
+#[derive(Debug)]
+pub(crate) enum PackageSelection<'a> {
+    Default,
+    Workspace { exclude: &'a [String] },
+    Packages(&'a [String]),
+}
+
 impl CheckFlags {
+    pub(crate) fn package_selection(&self) -> PackageSelection<'_> {
+        if self.workspace || self.all {
+            PackageSelection::Workspace {
+                exclude: &self.exclude,
+            }
+        } else if self.package.is_empty() {
+            debug_assert!(self.exclude.is_empty());
+            PackageSelection::Default
+        } else {
+            debug_assert!(self.exclude.is_empty());
+            PackageSelection::Packages(&self.package)
+        }
+    }
+
     pub fn to_flags(&self) -> Vec<String> {
         let mut out = Vec::new();
 

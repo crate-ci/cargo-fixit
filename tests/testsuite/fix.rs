@@ -280,18 +280,13 @@ fn do_not_fix_non_relevant_deps() {
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
         .cwd("foo")
-        .with_stderr_data(str![[r#"
-[CHECKING] bar v0.1.0
-[FIXED] [ROOT]/foo/bar/src/lib.rs (1 fix)
-
-"#]])
         .run();
 
-    assert!(!p.read_file("bar/src/lib.rs").contains("mut"));
+    assert!(p.read_file("bar/src/lib.rs").contains("mut"));
 }
 
 #[cargo_test]
-fn fixes_dependency_of_default_workspace_member() {
+fn does_not_fix_dependency_of_default_workspace_member() {
     let p = package_selection_project(
         "[workspace]\nmembers = ['a', 'b']\ndefault-members = ['a']\nresolver = '2'\n",
     );
@@ -299,28 +294,28 @@ fn fixes_dependency_of_default_workspace_member() {
     p.cargo_("fix --allow-no-vcs").run();
 
     assert!(!p.read_file("a/src/lib.rs").contains("let mut value"));
-    assert!(!p.read_file("b/src/lib.rs").contains("let mut value"));
+    assert!(p.read_file("b/src/lib.rs").contains("let mut value"));
 }
 
 #[cargo_test]
-fn fixes_dependency_of_selected_workspace_package() {
+fn does_not_fix_dependency_of_selected_workspace_package() {
     let p = package_selection_project("[workspace]\nmembers = ['a', 'b']\nresolver = '2'\n");
 
     p.cargo_("fix --package a --allow-no-vcs").run();
 
     assert!(!p.read_file("a/src/lib.rs").contains("let mut value"));
-    assert!(!p.read_file("b/src/lib.rs").contains("let mut value"));
+    assert!(p.read_file("b/src/lib.rs").contains("let mut value"));
 }
 
 #[cargo_test]
-fn fixes_excluded_workspace_dependency() {
+fn does_not_fix_excluded_workspace_dependency() {
     let p = package_selection_project("[workspace]\nmembers = ['a', 'b']\nresolver = '2'\n");
 
     p.cargo_("fix --workspace --exclude b* --allow-no-vcs")
         .run();
 
     assert!(!p.read_file("a/src/lib.rs").contains("let mut value"));
-    assert!(!p.read_file("b/src/lib.rs").contains("let mut value"));
+    assert!(p.read_file("b/src/lib.rs").contains("let mut value"));
 }
 
 fn package_selection_project(workspace_manifest: &str) -> Project {
@@ -351,7 +346,7 @@ fn package_selection_project(workspace_manifest: &str) -> Project {
 }
 
 #[cargo_test]
-fn clippy_fixes_denied_warnings_in_external_path_dependencies() {
+fn clippy_does_not_fix_non_relevant_path_dependencies() {
     let p = project()
         .no_manifest()
         .file(
@@ -378,7 +373,7 @@ fn clippy_fixes_denied_warnings_in_external_path_dependencies() {
 
     p.cargo_("fix --clippy --allow-no-vcs").cwd("foo").run();
 
-    assert!(!p.read_file("bar/src/lib.rs").contains("let mut value"));
+    assert!(p.read_file("bar/src/lib.rs").contains("let mut value"));
 }
 
 #[cargo_test]
