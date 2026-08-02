@@ -62,6 +62,10 @@ struct File {
     original_source: String,
 }
 
+type BuildUnitErrors = IndexMap<BuildUnit, IndexSet<String>>;
+type BuildUnitSuggestions =
+    IndexMap<BuildUnit, IndexMap<String, IndexSet<(Suggestion, Option<String>)>>>;
+
 #[tracing::instrument(skip_all)]
 fn exec(args: FixitArgs) -> CargoResult<()> {
     args.color.write_global();
@@ -512,7 +516,7 @@ impl PackageGraph {
 fn finish_target(
     target: BuildUnit,
     active_targets: &mut IndexMap<BuildUnit, IndexMap<String, File>>,
-    errors: &mut IndexMap<BuildUnit, IndexSet<String>>,
+    errors: &mut BuildUnitErrors,
     seen: &mut HashSet<BuildUnit>,
 ) -> CargoResult<()> {
     if seen
@@ -601,14 +605,10 @@ fn to_check_output(output: std::process::Output) -> (Vec<CheckOutput>, Option<i3
 }
 
 #[tracing::instrument(skip_all)]
-#[allow(clippy::type_complexity)]
 fn collect_errors(
     messages: impl Iterator<Item = CheckOutput>,
     seen: &HashSet<BuildUnit>,
-) -> (
-    IndexMap<BuildUnit, IndexSet<String>>,
-    IndexMap<BuildUnit, IndexMap<String, IndexSet<(Suggestion, Option<String>)>>>,
-) {
+) -> (BuildUnitErrors, BuildUnitSuggestions) {
     let only = HashSet::new();
     let mut build_unit_map = IndexMap::new();
 
