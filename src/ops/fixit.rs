@@ -8,6 +8,7 @@ use std::path::Path;
 use std::process::Command;
 use std::process::Stdio;
 
+use cargo_metadata::Metadata;
 use cargo_metadata::MetadataCommand;
 use cargo_util::paths;
 use clap::Parser;
@@ -92,6 +93,7 @@ fn fix(
 
     let mut last_errors = IndexMap::new();
     let mut claimed_files: HashMap<same_file::Handle, BuildUnit> = HashMap::new();
+    let mut package_metadata_cache: Option<Option<Metadata>> = None;
     let mut package_graph_cache: Option<Option<PackageGraph>> = None;
     let mut seen = HashSet::new();
 
@@ -255,7 +257,12 @@ fn fix(
                     }
 
                     if package_graph_cache.is_none() {
-                        package_graph_cache = Some(PackageGraph::load(&args.check_flags));
+                        package_graph_cache = Some(
+                            package_metadata(&mut package_metadata_cache, &args.check_flags)
+                                .and_then(|metadata| {
+                                    PackageGraph::load(metadata, &args.check_flags)
+                                }),
+                        );
                     }
                     let Some(Some(graph)) = package_graph_cache.as_mut() else {
                         continue;
@@ -347,6 +354,27 @@ fn fix(
     Ok(())
 }
 
+/// Loads unresolved package metadata once, caching failed attempts.
+fn package_metadata<'a>(
+    cache: &'a mut Option<Option<Metadata>>,
+    flags: &CheckFlags,
+) -> Option<&'a Metadata> {
+    cache
+        .get_or_insert_with(|| {
+            let mut command = MetadataCommand::new();
+            command.no_deps();
+            command.other_options(flags.to_metadata_flags());
+            match command.exec() {
+                Ok(metadata) => Some(metadata),
+                Err(error) => {
+                    warn!("failed to run `cargo metadata`: {error}");
+                    None
+                }
+            }
+        })
+        .as_ref()
+}
+
 /// Package dependencies used to batch only transitively unrelated packages.
 #[derive(Debug)]
 struct PackageGraph {
@@ -356,19 +384,7 @@ struct PackageGraph {
 
 impl PackageGraph {
     /// Loads the package graph, returning `None` when batching must remain serial.
-    fn load(flags: &CheckFlags) -> Option<Self> {
-        let mut command = MetadataCommand::new();
-        command.no_deps();
-        command.other_options(flags.to_metadata_flags());
-
-        let metadata = match command.exec() {
-            Ok(metadata) => metadata,
-            Err(error) => {
-                warn!("failed to run `cargo metadata`: {error}");
-                return None;
-            }
-        };
-
+    fn load(metadata: &Metadata, flags: &CheckFlags) -> Option<Self> {
         // A script is identified by its manifest path, not its containing directory.
         if metadata
             .packages
