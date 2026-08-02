@@ -291,6 +291,66 @@ fn do_not_fix_non_relevant_deps() {
 }
 
 #[cargo_test]
+fn fixes_dependency_of_default_workspace_member() {
+    let p = package_selection_project(
+        "[workspace]\nmembers = ['a', 'b']\ndefault-members = ['a']\nresolver = '2'\n",
+    );
+
+    p.cargo_("fix --allow-no-vcs").run();
+
+    assert!(!p.read_file("a/src/lib.rs").contains("let mut value"));
+    assert!(!p.read_file("b/src/lib.rs").contains("let mut value"));
+}
+
+#[cargo_test]
+fn fixes_dependency_of_selected_workspace_package() {
+    let p = package_selection_project("[workspace]\nmembers = ['a', 'b']\nresolver = '2'\n");
+
+    p.cargo_("fix --package a --allow-no-vcs").run();
+
+    assert!(!p.read_file("a/src/lib.rs").contains("let mut value"));
+    assert!(!p.read_file("b/src/lib.rs").contains("let mut value"));
+}
+
+#[cargo_test]
+fn fixes_excluded_workspace_dependency() {
+    let p = package_selection_project("[workspace]\nmembers = ['a', 'b']\nresolver = '2'\n");
+
+    p.cargo_("fix --workspace --exclude b* --allow-no-vcs")
+        .run();
+
+    assert!(!p.read_file("a/src/lib.rs").contains("let mut value"));
+    assert!(!p.read_file("b/src/lib.rs").contains("let mut value"));
+}
+
+fn package_selection_project(workspace_manifest: &str) -> Project {
+    project()
+        .file("Cargo.toml", workspace_manifest)
+        .file(
+            "a/Cargo.toml",
+            r#"
+                [package]
+                name = "a"
+                version = "0.1.0"
+                edition = "2021"
+
+                [dependencies]
+                b = { path = '../b' }
+            "#,
+        )
+        .file(
+            "a/src/lib.rs",
+            "pub fn value() -> usize { let mut value = b::value(); value }\n",
+        )
+        .file("b/Cargo.toml", &basic_manifest("b", "0.1.0"))
+        .file(
+            "b/src/lib.rs",
+            "pub fn value() -> usize { let mut value = 1; value }\n",
+        )
+        .build()
+}
+
+#[cargo_test]
 fn clippy_fixes_denied_warnings_in_external_path_dependencies() {
     let p = project()
         .no_manifest()
