@@ -8,13 +8,17 @@ use std::path::Path;
 use std::process::Command;
 use std::process::Stdio;
 
+use anyhow::Context;
+use cargo_metadata::Metadata;
 use cargo_metadata::MetadataCommand;
 use cargo_util::paths;
+use cargo_util_schemas::core::PackageIdSpec;
 use clap::Parser;
 use indexmap::{IndexMap, IndexSet};
 use rustfix::{collect_suggestions, CodeFix, Suggestion};
 use tracing::{trace, warn};
 
+use crate::util::cli::PackageSelection;
 use crate::{
     core::{shell, sysroot::get_sysroot},
     ops::check::{BuildUnit, CheckOutput, DiagnosticLevel, Message, MessageDiagnostic},
@@ -61,6 +65,10 @@ struct File {
     original_source: String,
 }
 
+type BuildUnitErrors = IndexMap<BuildUnit, IndexSet<String>>;
+type BuildUnitSuggestions =
+    IndexMap<BuildUnit, IndexMap<String, IndexSet<(Suggestion, Option<String>)>>>;
+
 #[tracing::instrument(skip_all)]
 fn exec(args: FixitArgs) -> CargoResult<()> {
     args.color.write_global();
@@ -92,6 +100,8 @@ fn fix(
 
     let mut last_errors = IndexMap::new();
     let mut claimed_files: HashMap<same_file::Handle, BuildUnit> = HashMap::new();
+    let mut package_metadata_cache = None;
+    let mut primary_packages_cache = None;
     let mut package_graph_cache: Option<Option<PackageGraph>> = None;
     let mut seen = HashSet::new();
 
@@ -174,6 +184,16 @@ fn fix(
         }
 
         let (mut errors, mut build_unit_map) = collect_errors(messages.into_iter(), &seen);
+        if build_unit_map.values().any(|file_map| !file_map.is_empty()) {
+            let primary_packages = if let Some(primary_packages) = &primary_packages_cache {
+                primary_packages
+            } else {
+                let metadata = package_metadata(&mut package_metadata_cache, &args.check_flags)?;
+                primary_packages_cache
+                    .insert(PrimaryPackages::from_metadata(metadata, &args.check_flags)?)
+            };
+            retain_primary_fixes(primary_packages, &mut errors, &mut build_unit_map);
+        }
 
         if iteration >= max_iterations {
             if active_targets.is_empty() {
@@ -255,7 +275,9 @@ fn fix(
                     }
 
                     if package_graph_cache.is_none() {
-                        package_graph_cache = Some(PackageGraph::load(&args.check_flags));
+                        let metadata =
+                            package_metadata(&mut package_metadata_cache, &args.check_flags)?;
+                        package_graph_cache = Some(PackageGraph::load(metadata, &args.check_flags));
                     }
                     let Some(Some(graph)) = package_graph_cache.as_mut() else {
                         continue;
@@ -347,6 +369,152 @@ fn fix(
     Ok(())
 }
 
+/// Packages that Cargo treats as primary for the current invocation.
+#[derive(Debug)]
+struct PrimaryPackages {
+    package_ids: HashSet<String>,
+}
+
+impl PrimaryPackages {
+    /// Reconstructs Cargo's primary package set from its package-selection flags.
+    fn from_metadata(metadata: &Metadata, flags: &CheckFlags) -> CargoResult<Self> {
+        let package_ids = match flags.package_selection() {
+            PackageSelection::Default => metadata
+                .workspace_default_members
+                .iter()
+                .map(|package_id| package_id.repr.clone())
+                .collect(),
+            PackageSelection::Workspace { exclude } => {
+                let matcher = PackageSpecMatcher::new(exclude)?;
+                let mut package_ids = HashSet::new();
+                for package in metadata.workspace_packages() {
+                    if !matcher.matches(package)? {
+                        package_ids.insert(package.id.repr.clone());
+                    }
+                }
+                package_ids
+            }
+            PackageSelection::Packages(packages) => {
+                let matcher = PackageSpecMatcher::new(packages)?;
+                let mut package_ids = HashSet::new();
+                for package in metadata.workspace_packages() {
+                    if matcher.matches(package)? {
+                        package_ids.insert(package.id.repr.clone());
+                    }
+                }
+                package_ids
+            }
+        };
+        Ok(Self { package_ids })
+    }
+
+    fn contains(&self, package_id: &str) -> bool {
+        self.package_ids.contains(package_id)
+    }
+}
+
+/// Matches Cargo package specifications and package-name glob patterns.
+#[derive(Debug)]
+struct PackageSpecMatcher {
+    specs: Vec<PackageIdSpec>,
+    patterns: Vec<glob::Pattern>,
+}
+
+impl PackageSpecMatcher {
+    fn new(raw_specs: &[String]) -> CargoResult<Self> {
+        let mut specs = Vec::new();
+        let mut patterns = Vec::new();
+
+        for raw_spec in raw_specs {
+            match PackageIdSpec::parse(raw_spec) {
+                Ok(spec) => specs.push(spec),
+                Err(_) if raw_spec.contains(&['*', '?', '[', ']'][..]) => {
+                    let pattern = glob::Pattern::new(raw_spec)
+                        .with_context(|| format!("failed to parse package pattern `{raw_spec}`"))?;
+                    patterns.push(pattern);
+                }
+                Err(error) => {
+                    return Err(error).with_context(|| {
+                        format!("failed to parse package specification `{raw_spec}`")
+                    });
+                }
+            }
+        }
+
+        Ok(Self { specs, patterns })
+    }
+
+    fn matches(&self, package: &cargo_metadata::Package) -> CargoResult<bool> {
+        if self
+            .patterns
+            .iter()
+            .any(|pattern| pattern.matches(package.name.as_ref()))
+        {
+            return Ok(true);
+        }
+
+        let package_id = PackageIdSpec::parse(&package.id.repr)
+            .with_context(|| format!("failed to parse package ID `{}`", package.id))?;
+        Ok(self
+            .specs
+            .iter()
+            .any(|spec| package_id_matches(spec, &package_id)))
+    }
+}
+
+/// Mirrors Cargo's internal package-ID matching rules.
+fn package_id_matches(spec: &PackageIdSpec, package_id: &PackageIdSpec) -> bool {
+    spec.name() == package_id.name()
+        && spec.partial_version().is_none_or(|version| {
+            package_id
+                .version()
+                .is_some_and(|package_version| version.matches(&package_version))
+        })
+        && spec.url().is_none_or(|url| package_id.url() == Some(url))
+        && spec
+            .kind()
+            .is_none_or(|kind| package_id.kind() == Some(kind))
+}
+
+/// Loads unresolved package metadata once and reuses it for selection and ordering.
+fn package_metadata<'a>(
+    cache: &'a mut Option<Metadata>,
+    flags: &CheckFlags,
+) -> CargoResult<&'a Metadata> {
+    match cache {
+        Some(metadata) => Ok(metadata),
+        cache @ None => {
+            let mut command = MetadataCommand::new();
+            command.no_deps();
+            command.other_options(flags.to_metadata_flags());
+            let metadata = command.exec().context("failed to run `cargo metadata`")?;
+            Ok(cache.insert(metadata))
+        }
+    }
+}
+
+/// Discards dependency suggestions while preserving their diagnostics for display.
+fn retain_primary_fixes(
+    primary_packages: &PrimaryPackages,
+    errors: &mut BuildUnitErrors,
+    build_unit_map: &mut BuildUnitSuggestions,
+) {
+    for (build_unit, file_map) in build_unit_map {
+        if file_map.is_empty() || primary_packages.contains(&build_unit.package_id) {
+            continue;
+        }
+
+        let build_unit_errors = errors.entry(build_unit.clone()).or_default();
+        build_unit_errors.extend(
+            file_map
+                .values()
+                .flatten()
+                .filter_map(|(_, diagnostic)| diagnostic.clone()),
+        );
+        file_map.clear();
+    }
+}
+
 /// Package dependencies used to batch only transitively unrelated packages.
 #[derive(Debug)]
 struct PackageGraph {
@@ -356,19 +524,7 @@ struct PackageGraph {
 
 impl PackageGraph {
     /// Loads the package graph, returning `None` when batching must remain serial.
-    fn load(flags: &CheckFlags) -> Option<Self> {
-        let mut command = MetadataCommand::new();
-        command.no_deps();
-        command.other_options(flags.to_metadata_flags());
-
-        let metadata = match command.exec() {
-            Ok(metadata) => metadata,
-            Err(error) => {
-                warn!("failed to run `cargo metadata`: {error}");
-                return None;
-            }
-        };
-
+    fn load(metadata: &Metadata, flags: &CheckFlags) -> Option<Self> {
         // A script is identified by its manifest path, not its containing directory.
         if metadata
             .packages
@@ -496,7 +652,7 @@ impl PackageGraph {
 fn finish_target(
     target: BuildUnit,
     active_targets: &mut IndexMap<BuildUnit, IndexMap<String, File>>,
-    errors: &mut IndexMap<BuildUnit, IndexSet<String>>,
+    errors: &mut BuildUnitErrors,
     seen: &mut HashSet<BuildUnit>,
 ) -> CargoResult<()> {
     if seen
@@ -585,14 +741,10 @@ fn to_check_output(output: std::process::Output) -> (Vec<CheckOutput>, Option<i3
 }
 
 #[tracing::instrument(skip_all)]
-#[allow(clippy::type_complexity)]
 fn collect_errors(
     messages: impl Iterator<Item = CheckOutput>,
     seen: &HashSet<BuildUnit>,
-) -> (
-    IndexMap<BuildUnit, IndexSet<String>>,
-    IndexMap<BuildUnit, IndexMap<String, IndexSet<(Suggestion, Option<String>)>>>,
-) {
+) -> (BuildUnitErrors, BuildUnitSuggestions) {
     let only = HashSet::new();
     let mut build_unit_map = IndexMap::new();
 

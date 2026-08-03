@@ -75,7 +75,7 @@ json-diagnostic-rendered-ansi
 }
 
 #[cargo_test]
-fn single_package_skips_dependency_metadata() {
+fn single_package_loads_primary_package_metadata() {
     let fake_cargo = fake_cargo();
 
     let p = project()
@@ -88,6 +88,7 @@ fn single_package_skips_dependency_metadata() {
             "fn main() { let mut value = 1; let _ = value; }\n",
         )
         .build();
+    let metadata_log = p.root().join("metadata.log");
 
     let mut command = cargo_test_support::process(env!("CARGO_BIN_EXE_cargo-fixit"));
     command.cwd(p.root());
@@ -95,6 +96,7 @@ fn single_package_skips_dependency_metadata() {
     command.arg("--allow-no-vcs");
     command.env("CARGO", fake_cargo.bin("fake-cargo"));
     command.env("FIXIT_REAL_CARGO", env!("CARGO"));
+    command.env("FIXIT_METADATA_LOG", &metadata_log);
     command.env("FIXIT_LOG", "cargo_fixit=warn");
 
     cargo_test_support::execs()
@@ -109,6 +111,15 @@ fn single_package_skips_dependency_metadata() {
 
     assert!(!p.read_file("src/lib.rs").contains("let mut value"));
     assert!(!p.read_file("src/main.rs").contains("let mut value"));
+    assert_ui().eq(
+        p.read_file("metadata.log"),
+        str![[r#"
+metadata
+--format-version
+1
+--no-deps
+"#]],
+    );
 }
 
 fn fake_cargo() -> Project {
@@ -121,7 +132,14 @@ fn fake_cargo() -> Project {
             fn main() {
                 let args = std::env::args_os().skip(1).collect::<Vec<_>>();
                 if args.first().is_some_and(|arg| arg == "metadata") {
-                    std::process::exit(1);
+                    if let Some(log) = std::env::var_os("FIXIT_METADATA_LOG") {
+                        let args = args
+                            .iter()
+                            .map(|arg| arg.to_string_lossy())
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        std::fs::write(log, args).unwrap();
+                    }
                 }
 
                 if let Some(marker) = std::env::var_os("CARGO_FIXIT_FAKE_CARGO_MARKER") {
@@ -674,7 +692,7 @@ metadata --format-version 1 --no-deps
 
 #[cfg(unix)]
 #[cargo_test(nightly, reason = "-Zscript is unstable")]
-fn cargo_script_falls_back_to_resolved_metadata() {
+fn cargo_script_selects_only_script_package() {
     use std::os::unix::fs::PermissionsExt;
 
     let p = project()
@@ -737,10 +755,9 @@ exec "$FIXIT_REAL_CARGO" "$@"
         p.read_file("metadata.log").trim_end(),
         str![[r#"
 metadata --format-version 1 --no-deps -Z script --manifest-path script.rs
-metadata --format-version 1 -Z script --manifest-path script.rs
 "#]],
     );
-    assert!(!p.read_file("src/lib.rs").contains("let mut value"));
+    assert!(p.read_file("src/lib.rs").contains("let mut value"));
     assert!(!p.read_file("script.rs").contains("let mut value"));
 }
 
