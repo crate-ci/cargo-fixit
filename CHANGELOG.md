@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Fixes
+
+- Only fix selected packages
+
 ## [0.1.11] - 2026-08-01
 
 ### Performance
