@@ -1085,3 +1085,28 @@ fn print_errors_after_fixed() {
 "#]])
         .run();
 }
+
+#[cargo_test]
+fn non_json_error() {
+    let p = project()
+        .file("Cargo.toml", "[")
+        .file(
+            "src/lib.rs",
+            r#"
+            pub fn a() {
+                let mut b = 10;
+                let _ = b;
+            }
+            "#,
+        )
+        .build();
+
+    p.cargo_("fixit --allow-no-vcs")
+        .with_status(101)
+        .with_stderr_data(str![[r#"
+[NOTE] try using `--broken-code` to fix errors
+[ERROR] could not compile
+
+"#]])
+        .run();
+}
