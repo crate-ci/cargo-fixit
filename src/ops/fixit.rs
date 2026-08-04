@@ -118,7 +118,11 @@ fn fix(
         trace!("active_targets={active_targets:?}");
         let (messages, exit_code) = check(args, &mut lint_cap)?;
 
-        if !args.broken_code && exit_code != Some(0) {
+        if messages.is_empty() && exit_code != Some(0) {
+            let mut command = args.to_command();
+            command.status()?;
+            anyhow::bail!("could not compile");
+        } else if !args.broken_code && exit_code != Some(0) {
             let mut out = String::new();
 
             if !active_targets.is_empty() {

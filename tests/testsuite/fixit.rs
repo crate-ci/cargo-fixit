@@ -1104,7 +1104,11 @@ fn non_json_error() {
     p.cargo_("fixit --allow-no-vcs")
         .with_status(101)
         .with_stderr_data(str![[r#"
-[NOTE] try using `--broken-code` to fix errors
+[ERROR] unquoted keys cannot be empty, expected letters, numbers, `-`, `_`
+ --> Cargo.toml:1:2
+  |
+1 | [
+  |  ^
 [ERROR] could not compile
 
 "#]])
