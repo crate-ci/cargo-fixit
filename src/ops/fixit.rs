@@ -57,6 +57,14 @@ impl FixitArgs {
     pub fn exec(self) -> CargoResult<()> {
         exec(self)
     }
+
+    fn to_command(&self) -> Command {
+        let cmd = if self.clippy { "clippy" } else { "check" };
+        let cargo = env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+        let mut command = Command::new(cargo);
+        command.arg(cmd).args(self.check_flags.to_flags());
+        command
+    }
 }
 
 #[derive(Debug, Default)]
@@ -110,7 +118,11 @@ fn fix(
         trace!("active_targets={active_targets:?}");
         let (messages, exit_code) = check(args, &mut lint_cap)?;
 
-        if !args.broken_code && exit_code != Some(0) {
+        if messages.is_empty() && exit_code != Some(0) {
+            let mut command = args.to_command();
+            command.status()?;
+            anyhow::bail!("could not compile");
+        } else if !args.broken_code && exit_code != Some(0) {
             let mut out = String::new();
 
             if !active_targets.is_empty() {
@@ -679,12 +691,9 @@ fn finish_target(
 }
 
 fn check(args: &FixitArgs, lint_cap: &mut bool) -> CargoResult<(Vec<CheckOutput>, Option<i32>)> {
-    let cmd = if args.clippy { "clippy" } else { "check" };
-    let cargo = env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
-    let mut command = Command::new(cargo);
+    let mut command = args.to_command();
     command
-        .args([cmd, "--message-format", "json-diagnostic-rendered-ansi"])
-        .args(args.check_flags.to_flags())
+        .args(["--message-format", "json-diagnostic-rendered-ansi"])
         .stderr(Stdio::piped())
         .stdout(Stdio::piped());
     if *lint_cap {
