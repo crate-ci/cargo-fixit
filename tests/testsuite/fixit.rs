@@ -216,7 +216,9 @@ fn denied_warnings_project() -> Project {
     project()
         .file(
             "src/lib.rs",
-            "#![deny(warnings)]\npub fn a() { let mut value = 1; let _ = value; }\n",
+            "#![deny(warnings)]
+pub fn a() { let mut value = 1; let _ = value; }
+",
         )
         .build()
 }
@@ -262,24 +264,35 @@ fn clippy_preserves_workspace_fingerprints_without_denied_warnings() {
     let p = project()
         .file(
             "Cargo.toml",
-            "[workspace]\nmembers = ['app', 'cached-dependency']\nresolver = '2'\n",
+            "[workspace]
+members = ['app', 'cached-dependency']
+resolver = '2'
+",
         )
         .file(
             "app/Cargo.toml",
             &format!(
-                "{}\n[dependencies]\ncached-dependency = {{ path = '../cached-dependency' }}\n",
+                "{}
+[dependencies]
+cached-dependency = {{ path = '../cached-dependency' }}
+",
                 basic_manifest("app", "0.1.0")
             ),
         )
         .file(
             "app/src/lib.rs",
-            "pub fn app() { cached_dependency::foo(); }\n",
+            "pub fn app() { cached_dependency::foo(); }
+",
         )
         .file(
             "cached-dependency/Cargo.toml",
             &basic_manifest("cached-dependency", "0.1.0"),
         )
-        .file("cached-dependency/src/lib.rs", "pub fn foo() {}\n")
+        .file(
+            "cached-dependency/src/lib.rs",
+            "pub fn foo() {}
+",
+        )
         .build();
 
     p.cargo_("clippy --workspace").run();
@@ -300,7 +313,9 @@ fn clippy_fixes_denied_warnings() {
     let p = project()
         .file(
             "src/lib.rs",
-            "#![deny(warnings)]\npub fn a() { let mut value = 1; let _ = value; }\n",
+            "#![deny(warnings)]
+pub fn a() { let mut value = 1; let _ = value; }
+",
         )
         .build();
 
@@ -316,7 +331,10 @@ fn fixes_denied_lints_with_compiler_error_codes() {
     let p = project()
         .file(
             "src/lib.rs",
-            "#![allow(unused_variables, non_snake_case)]\nenum Choice { Value }\npub fn check() { match Choice::Value { Value => {} } }\n",
+            "#![allow(unused_variables, non_snake_case)]
+enum Choice { Value }
+pub fn check() { match Choice::Value { Value => {} } }
+",
         )
         .build();
 
@@ -414,8 +432,11 @@ fn fixable_and_unfixable() {
 fn restores_prior_writes_when_later_write_fails() {
     use std::os::unix::fs::PermissionsExt;
 
-    let original_lib = "mod module;\npub fn lib() { let mut value = 1; let _ = value; }\n";
-    let original_module = "pub fn module() { let mut value = 1; let _ = value; }\n";
+    let original_lib = "mod module;
+pub fn lib() { let mut value = 1; let _ = value; }
+";
+    let original_module = "pub fn module() { let mut value = 1; let _ = value; }
+";
     let p = project()
         .file("Cargo.toml", &basic_manifest("foo", "0.1.0"))
         .file("src/lib.rs", original_lib)
@@ -443,12 +464,17 @@ fn restores_prior_writes_when_later_write_fails() {
 fn restores_all_files_when_batched_write_fails() {
     use std::os::unix::fs::PermissionsExt;
 
-    let original_a = "pub fn a() -> i32 { let mut value = 1; value }\n";
-    let original_b = "pub fn b() -> i32 { let mut value = 1; value }\n";
+    let original_a = "pub fn a() -> i32 { let mut value = 1; value }
+";
+    let original_b = "pub fn b() -> i32 { let mut value = 1; value }
+";
     let p = project()
         .file(
             "Cargo.toml",
-            "[workspace]\nmembers = [\"a\", \"b\"]\nresolver = \"2\"\n",
+            r#"[workspace]
+members = ["a", "b"]
+resolver = "2"
+"#,
         )
         .file("a/Cargo.toml", &basic_manifest("a", "0.1.0"))
         .file("a/src/lib.rs", original_a)
@@ -477,17 +503,22 @@ fn independent_workspace_packages() {
     let p = project()
         .file(
             "Cargo.toml",
-            "[workspace]\nmembers = [\"a\", \"b\"]\nresolver = \"2\"\n",
+            r#"[workspace]
+members = ["a", "b"]
+resolver = "2"
+"#,
         )
         .file("a/Cargo.toml", &basic_manifest("a", "0.1.0"))
         .file(
             "a/src/lib.rs",
-            "pub fn a() { let mut value = 1; let _ = value; }\n",
+            "pub fn a() { let mut value = 1; let _ = value; }
+",
         )
         .file("b/Cargo.toml", &basic_manifest("b", "0.1.0"))
         .file(
             "b/src/lib.rs",
-            "pub fn b() { let mut value = 1; let _ = value; }\n",
+            "pub fn b() { let mut value = 1; let _ = value; }
+",
         )
         .build();
 
@@ -508,19 +539,27 @@ fn independent_workspace_packages() {
     for name in ["a", "b"] {
         assert_eq!(
             p.read_file(format!("{name}/src/lib.rs")),
-            format!("pub fn {name}() {{ let value = 1; let _ = value; }}\n")
+            format!(
+                "pub fn {name}() {{ let value = 1; let _ = value; }}
+"
+            )
         );
     }
 }
 
 #[cargo_test]
 fn hardlinked_workspace_packages() {
-    let original = "pub fn sample() -> usize { let mut value = 1; value }\n";
-    let fixed = "pub fn sample() -> usize { let value = 1; value }\n";
+    let original = "pub fn sample() -> usize { let mut value = 1; value }
+";
+    let fixed = "pub fn sample() -> usize { let value = 1; value }
+";
     let p = project()
         .file(
             "Cargo.toml",
-            "[workspace]\nmembers = [\"a\", \"b\"]\nresolver = \"2\"\n",
+            r#"[workspace]
+members = ["a", "b"]
+resolver = "2"
+"#,
         )
         .file("a/Cargo.toml", &basic_manifest("a", "0.1.0"))
         .file("a/src/lib.rs", original)
@@ -838,44 +877,61 @@ fn dev_dependency_cycle_is_fixed_sequentially() {
     let p = project()
         .file(
             "Cargo.toml",
-            "[workspace]\nmembers = [\"a\", \"b\", \"c\"]\nresolver = \"2\"\n",
+            r#"[workspace]
+members = ["a", "b", "c"]
+resolver = "2"
+"#,
         )
         .file(
             "a/Cargo.toml",
             &format!(
-                "{}\n[dev-dependencies]\nb = {{ path = '../b' }}\n",
+                "{}
+[dev-dependencies]
+b = {{ path = '../b' }}
+",
                 basic_manifest("a", "0.1.0")
             ),
         )
         .file(
             "a/src/lib.rs",
-            "pub fn a() -> usize { let mut value = 1; value }\n",
+            "pub fn a() -> usize { let mut value = 1; value }
+",
         )
         .file(
             "a/tests/cycle.rs",
-            "#[test]\nfn cycle() { let mut value = b::b(); assert_eq!(value, 1); }\n",
+            "#[test]
+fn cycle() { let mut value = b::b(); assert_eq!(value, 1); }
+",
         )
         .file(
             "b/Cargo.toml",
             &format!(
-                "{}\n[dependencies]\nc = {{ path = '../c' }}\n",
+                "{}
+[dependencies]
+c = {{ path = '../c' }}
+",
                 basic_manifest("b", "0.1.0")
             ),
         )
         .file(
             "b/src/lib.rs",
-            "pub fn b() -> usize { let mut value = c::c(); value }\n",
+            "pub fn b() -> usize { let mut value = c::c(); value }
+",
         )
         .file(
             "c/Cargo.toml",
             &format!(
-                "{}\n[dependencies]\na = {{ path = '../a' }}\n",
+                "{}
+[dependencies]
+a = {{ path = '../a' }}
+",
                 basic_manifest("c", "0.1.0")
             ),
         )
         .file(
             "c/src/lib.rs",
-            "pub fn c() -> usize { let mut value = a::a(); value }\n",
+            "pub fn c() -> usize { let mut value = a::a(); value }
+",
         )
         .build();
 
@@ -960,7 +1016,10 @@ fn build_script_fixes_refresh_generated_source_before_downstream_fixes() {
             .file("build.rs", build_script)
             .file(
                 "src/lib.rs",
-                "use std::mem::replace;\n\ninclude!(concat!(env!(\"OUT_DIR\"), \"/generated.rs\"));\n",
+                r#"use std::mem::replace;
+
+include!(concat!(env!("OUT_DIR"), "/generated.rs"));
+"#,
             )
             .build();
 
@@ -977,12 +1036,18 @@ fn proc_macro_fixes_refresh_expansions_before_downstream_fixes() {
     let p = project()
         .file(
             "Cargo.toml",
-            "[workspace]\nmembers = [\"codegen\", \"consumer\"]\nresolver = \"2\"\n",
+            r#"[workspace]
+members = ["codegen", "consumer"]
+resolver = "2"
+"#,
         )
         .file(
             "codegen/Cargo.toml",
             &format!(
-                "{}\n[lib]\nproc-macro = true\n",
+                "{}
+[lib]
+proc-macro = true
+",
                 basic_manifest("codegen", "0.1.0")
             ),
         )
@@ -1011,13 +1076,21 @@ fn proc_macro_fixes_refresh_expansions_before_downstream_fixes() {
         .file(
             "consumer/Cargo.toml",
             &format!(
-                "{}\n[dependencies]\ncodegen = {{ path = '../codegen' }}\n",
+                "{}
+[dependencies]
+codegen = {{ path = '../codegen' }}
+",
                 basic_manifest("consumer", "0.1.0")
             ),
         )
         .file(
             "consumer/src/lib.rs",
-            "extern crate codegen;\n\nuse std::mem::replace;\n\ncodegen::generate!();\n",
+            "extern crate codegen;
+
+use std::mem::replace;
+
+codegen::generate!();
+",
         )
         .build();
 
