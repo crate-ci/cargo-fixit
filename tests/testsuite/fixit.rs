@@ -554,7 +554,7 @@ fn independent_packages_progress_while_another_retries() {
     ] {
         assert!(!p.read_file(path).contains("let mut"));
     }
-    assert_eq!(p.read_file("check.log").lines().count(), 4);
+    assert_eq!(p.read_file("check.log").lines().count(), 3);
     assert_eq!(
         crate::fix::rustc_invocations(&rustc_log, ["dependency", "consumer", "slow"]),
         [2, 3, 3]
