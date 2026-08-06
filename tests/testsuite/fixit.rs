@@ -678,6 +678,187 @@ fn rolling_wavefront_project() -> Project {
 }
 
 #[cargo_test]
+fn executable_leaf_targets_are_serialized() {
+    let fake_cargo = fake_cargo();
+
+    for (name, broken_code) in [("default", false), ("broken", true)] {
+        let p = project()
+            .at(format!("leaf-targets-{name}"))
+            .file(
+                "src/bin/first.rs",
+                "fn main() { let mut value = 1; let _ = value; }\n",
+            )
+            .file(
+                "src/bin/second.rs",
+                "fn main() { let mut value = 2; let _ = value; }\n",
+            )
+            .build();
+        let check_log = p.root().join("check.log");
+
+        let mut command = cargo_test_support::process(env!("CARGO_BIN_EXE_cargo-fixit"));
+        command.cwd(p.root());
+        command.arg("fixit");
+        command.arg("--bins");
+        command.arg("--allow-no-vcs");
+        if broken_code {
+            command.arg("--broken-code");
+        }
+        command.env("CARGO", fake_cargo.bin("fake-cargo"));
+        command.env("FIXIT_REAL_CARGO", env!("CARGO"));
+        command.env("FIXIT_CHECK_LOG", &check_log);
+        cargo_test_support::execs()
+            .with_process_builder(command)
+            .run();
+
+        assert_eq!(p.read_file("check.log").lines().count(), 3);
+        for target in ["first", "second"] {
+            assert!(!p.read_file(format!("src/bin/{target}.rs")).contains("let mut"));
+        }
+    }
+}
+
+#[cargo_test]
+fn executable_leaf_targets_with_shared_sources_remain_serial() {
+    let fake_cargo = fake_cargo();
+    let p = project()
+        .file(
+            "src/shared.rs",
+            "pub fn shared() -> usize { let mut value = 1; value }\n",
+        )
+        .file(
+            "src/bin/first.rs",
+            "#[path = \"../shared.rs\"] mod shared;\nfn main() { let mut value = shared::shared(); let _ = value; }\n",
+        )
+        .file(
+            "src/bin/second.rs",
+            "#[path = \"../shared.rs\"] mod shared;\nfn main() { let mut value = shared::shared(); let _ = value; }\n",
+        )
+        .build();
+    let check_log = p.root().join("check.log");
+
+    let mut command = cargo_test_support::process(env!("CARGO_BIN_EXE_cargo-fixit"));
+    command.cwd(p.root());
+    command.arg("fixit");
+    command.arg("--bins");
+    command.arg("--allow-no-vcs");
+    command.env("CARGO", fake_cargo.bin("fake-cargo"));
+    command.env("FIXIT_REAL_CARGO", env!("CARGO"));
+    command.env("FIXIT_CHECK_LOG", &check_log);
+    cargo_test_support::execs()
+        .with_process_builder(command)
+        .run();
+
+    assert_eq!(p.read_file("check.log").lines().count(), 3);
+    for path in ["src/shared.rs", "src/bin/first.rs", "src/bin/second.rs"] {
+        assert!(!p.read_file(path).contains("let mut"));
+    }
+}
+
+#[cargo_test]
+fn executable_leaf_targets_serialize_hidden_source_dependencies() {
+    let p = project()
+        .file("Cargo.toml", &basic_manifest("foo", "0.1.0"))
+        .file("build.rs", interdependent_bin_build_script())
+        .file(
+            "src/bin/first.rs",
+            "use std::mem::replace;\n\ninclude!(concat!(env!(\"OUT_DIR\"), \"/first.rs\"));\n\nfn main() { generated(); }\n",
+        )
+        .file(
+            "src/bin/second.rs",
+            "use std::mem::replace;\n\ninclude!(concat!(env!(\"OUT_DIR\"), \"/second.rs\"));\n\nfn main() { generated(); }\n",
+        )
+        .build();
+
+    p.cargo_("fixit --bins --jobs 1 --allow-no-vcs")
+        .with_stderr_data(str![[r#"
+[CHECKING] foo v0.1.0
+[FIXED] src/bin/[..].rs (1 fix)
+
+"#]])
+        .run();
+
+    assert_ne!(
+        p.read_file("src/bin/first.rs")
+            .contains("use std::mem::replace;"),
+        p.read_file("src/bin/second.rs")
+            .contains("use std::mem::replace;"),
+    );
+    p.cargo_("check --bins").run();
+}
+
+#[cargo_test]
+fn leaf_target_fixes_preserve_retired_wavefront_targets() {
+    let p = rolling_wavefront_project();
+    p.change_file(
+        "consumer/src/lib.rs",
+        "pub fn consumer() -> usize { dependency::dependency() }\n",
+    );
+    p.change_file("consumer/build.rs", interdependent_bin_build_script());
+    for target in ["first", "second"] {
+        p.change_file(
+            format!("consumer/src/bin/{target}.rs"),
+            &format!(
+                "use std::mem::replace;\ninclude!(concat!(env!(\"OUT_DIR\"), \"/{target}.rs\"));\nfn main() {{ generated(); }}\n"
+            ),
+        );
+    }
+
+    p.cargo_("fixit --workspace --lib --bins --jobs 1 --allow-no-vcs")
+        .with_stderr_data(str![[r#"
+[CHECKING] consumer v0.1.0
+[CHECKING] dependency v0.1.0
+[FIXED] dependency/src/lib.rs (1 fix)
+[CHECKING] slow v0.1.0
+[FIXED] slow/src/lib.rs (2 fixes)
+[FIXED] consumer/src/bin/[..].rs (1 fix)
+
+"#]])
+        .run();
+
+    assert!(!p.read_file("dependency/src/lib.rs").contains("let mut"));
+    assert!(!p.read_file("slow/src/lib.rs").contains("let mut"));
+    assert_ne!(
+        p.read_file("consumer/src/bin/first.rs")
+            .contains("use std::mem::replace;"),
+        p.read_file("consumer/src/bin/second.rs")
+            .contains("use std::mem::replace;"),
+    );
+    p.cargo_("check --workspace --lib --bins").run();
+}
+
+fn interdependent_bin_build_script() -> &'static str {
+    r#"
+        use std::env;
+        use std::fs;
+        use std::path::Path;
+
+        fn main() {
+            let first = fs::read_to_string("src/bin/first.rs").unwrap();
+            let second = fs::read_to_string("src/bin/second.rs").unwrap();
+            let imported = "use std::mem::replace;";
+            let empty = "pub fn generated() {}";
+            let used =
+                "pub fn generated() { let mut value = 0; let _ = replace(&mut value, 1); }";
+            let output = env::var_os("OUT_DIR").unwrap();
+            let output = Path::new(&output);
+
+            fs::write(
+                output.join("first.rs"),
+                if second.contains(imported) { empty } else { used },
+            )
+            .unwrap();
+            fs::write(
+                output.join("second.rs"),
+                if first.contains(imported) { empty } else { used },
+            )
+            .unwrap();
+            println!("cargo:rerun-if-changed=src/bin/first.rs");
+            println!("cargo:rerun-if-changed=src/bin/second.rs");
+        }
+    "#
+}
+
+#[cargo_test]
 fn hardlinked_workspace_packages() {
     let original = "pub fn sample() -> usize { let mut value = 1; value }\n";
     let fixed = "pub fn sample() -> usize { let value = 1; value }\n";
