@@ -24,6 +24,19 @@ Expectations
 - Edition migration is unsupported
 - The CLI is modeled off of `cargo fix` 1.89 (no implicit `--all-targets`)
 
+## Opt-in target parallelism
+
+Executable targets with independent sources and build inputs can be fixed in the same pass:
+
+```console
+$ cargo fixit --Zassume-independent-targets
+```
+
+This optimization is disabled by default. `include!`, `#[path]`, build scripts,
+and procedural macros can make targets depend on each other's sources. Successful
+compilation cannot prove semantic equivalence, so only opt in when those inputs
+are independent.
+
 ## License
 
 Licensed under either of
