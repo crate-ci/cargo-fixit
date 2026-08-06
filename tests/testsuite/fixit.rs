@@ -234,7 +234,7 @@ fn print_errors_after_fixed() {
 }
 
 #[cargo_test]
-fn non_json_error() {
+fn metadata_error() {
     let p = project()
         .file("Cargo.toml", "[")
         .file(
@@ -256,6 +256,30 @@ fn non_json_error() {
   |
 1 | [
   |  ^
+[ERROR] could not compile
+
+"#]])
+        .run();
+}
+
+#[cargo_test]
+fn non_json_error() {
+    let p = project()
+        .file(
+            "src/lib.rs",
+            r#"
+            pub fn a() {
+                let mut b = 10;
+                let _ = b;
+            }
+            "#,
+        )
+        .build();
+
+    p.cargo_("fixit --allow-no-vcs --bin foo")
+        .with_status(101)
+        .with_stderr_data(str![[r#"
+[ERROR] no bin target named `foo` in default-run packages
 [ERROR] could not compile
 
 "#]])
