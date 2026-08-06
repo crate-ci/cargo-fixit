@@ -87,10 +87,13 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
     match fix(&args, &mut active_targets) {
         Ok(()) => Ok(()),
         Err(error) => {
+            let mut restoration_error = None;
             for (file, original) in active_targets.values().flat_map(|files| files.iter()) {
-                paths::write(file, &original.original_source)?;
+                if let Err(error) = paths::write(file, &original.original_source) {
+                    restoration_error.get_or_insert(error);
+                }
             }
-            Err(error)
+            Err(restoration_error.unwrap_or(error))
         }
     }
 }
