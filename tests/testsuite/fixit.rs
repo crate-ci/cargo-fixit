@@ -251,12 +251,12 @@ fn metadata_error() {
     p.cargo_("fixit --allow-no-vcs")
         .with_status(101)
         .with_stderr_data(str![[r#"
-[ERROR] unquoted keys cannot be empty, expected letters, numbers, `-`, `_`
+[ERROR] failed to run `cargo metadata`: `cargo metadata` exited with an [ERROR] [ERROR] unquoted keys cannot be empty, expected letters, numbers, `-`, `_`
  --> Cargo.toml:1:2
   |
 1 | [
   |  ^
-[ERROR] could not compile
+
 
 "#]])
         .run();

@@ -112,10 +112,11 @@ fn fix(
 
     let mut last_errors = IndexMap::new();
     let mut claimed_files: HashMap<same_file::Handle, BuildUnit> = HashMap::new();
-    let mut package_metadata_cache = None;
     let mut primary_packages_cache = None;
     let mut package_graph_cache: Option<Option<PackageGraph>> = None;
     let mut seen = HashSet::new();
+
+    let package_metadata = package_metadata(&args.check_flags)?;
 
     loop {
         trace!("iteration={iteration}");
@@ -207,9 +208,10 @@ fn fix(
             let primary_packages = if let Some(primary_packages) = &primary_packages_cache {
                 primary_packages
             } else {
-                let metadata = package_metadata(&mut package_metadata_cache, &args.check_flags)?;
-                primary_packages_cache
-                    .insert(PrimaryPackages::from_metadata(metadata, &args.check_flags)?)
+                primary_packages_cache.insert(PrimaryPackages::from_metadata(
+                    &package_metadata,
+                    &args.check_flags,
+                )?)
             };
             retain_primary_fixes(primary_packages, &mut errors, &mut build_unit_map);
         }
@@ -294,9 +296,8 @@ fn fix(
                     }
 
                     if package_graph_cache.is_none() {
-                        let metadata =
-                            package_metadata(&mut package_metadata_cache, &args.check_flags)?;
-                        package_graph_cache = Some(PackageGraph::load(metadata, &args.check_flags));
+                        package_graph_cache =
+                            Some(PackageGraph::load(&package_metadata, &args.check_flags));
                     }
                     let Some(Some(graph)) = package_graph_cache.as_mut() else {
                         continue;
@@ -496,20 +497,12 @@ fn package_id_matches(spec: &PackageIdSpec, package_id: &PackageIdSpec) -> bool 
 }
 
 /// Loads unresolved package metadata once and reuses it for selection and ordering.
-fn package_metadata<'a>(
-    cache: &'a mut Option<Metadata>,
-    flags: &CheckFlags,
-) -> CargoResult<&'a Metadata> {
-    match cache {
-        Some(metadata) => Ok(metadata),
-        cache @ None => {
-            let mut command = MetadataCommand::new();
-            command.no_deps();
-            command.other_options(flags.to_metadata_flags());
-            let metadata = command.exec().context("failed to run `cargo metadata`")?;
-            Ok(cache.insert(metadata))
-        }
-    }
+fn package_metadata(flags: &CheckFlags) -> CargoResult<Metadata> {
+    let mut command = MetadataCommand::new();
+    command.no_deps();
+    command.other_options(flags.to_metadata_flags());
+    let metadata = command.exec().context("failed to run `cargo metadata`")?;
+    Ok(metadata)
 }
 
 /// Discards dependency suggestions while preserving their diagnostics for display.
