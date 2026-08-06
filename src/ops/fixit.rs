@@ -84,13 +84,23 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
     args.vcs_opts.valid_vcs()?;
 
     let mut active_targets = IndexMap::new();
-    match fix(&args, &mut active_targets) {
+    // Keep completed targets recoverable while their original batch is still active.
+    let mut retired_targets = IndexMap::new();
+    match fix(&args, &mut active_targets, &mut retired_targets) {
         Ok(()) => Ok(()),
         Err(error) => {
-            for (file, original) in active_targets.values().flat_map(|files| files.iter()) {
-                paths::write(file, &original.original_source)?;
+            let mut restoration_error = None;
+            for (file, original) in active_targets
+                .values()
+                .rev()
+                .chain(retired_targets.values().rev())
+                .flat_map(|files| files.iter().rev())
+            {
+                if let Err(error) = paths::write(file, &original.original_source) {
+                    restoration_error.get_or_insert(error);
+                }
             }
-            Err(error)
+            Err(restoration_error.unwrap_or(error))
         }
     }
 }
@@ -98,6 +108,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
 fn fix(
     args: &FixitArgs,
     active_targets: &mut IndexMap<BuildUnit, IndexMap<String, File>>,
+    retired_targets: &mut IndexMap<BuildUnit, IndexMap<String, File>>,
 ) -> CargoResult<()> {
     let max_iterations: usize = env::var("CARGO_FIX_MAX_RETRIES")
         .ok()
@@ -108,6 +119,7 @@ fn fix(
 
     let mut last_errors = IndexMap::new();
     let mut claimed_files: HashMap<same_file::Handle, BuildUnit> = HashMap::new();
+    let mut target_iterations: HashMap<BuildUnit, usize> = HashMap::new();
     let mut package_metadata_cache = None;
     let mut primary_packages_cache = None;
     let mut package_graph_cache: Option<Option<PackageGraph>> = None;
@@ -125,7 +137,7 @@ fn fix(
         } else if !args.broken_code && exit_code != Some(0) {
             let mut out = String::new();
 
-            if !active_targets.is_empty() {
+            if !active_targets.is_empty() || !retired_targets.is_empty() {
                 out.push_str(
                     "failed to automatically apply fixes suggested by rustc\n\n\
                     after fixes were automatically applied the \
@@ -138,13 +150,18 @@ fn fix(
                         fixes: _,
                         original_source,
                     },
-                ) in active_targets.values().flat_map(|files| files.iter())
+                ) in active_targets
+                    .values()
+                    .rev()
+                    .chain(retired_targets.values().rev())
+                    .flat_map(|files| files.iter().rev())
                 {
                     out.push_str(&format!("  * {file}\n"));
                     shell::note(format!("reverting `{file}` to its original state"))?;
                     paths::write(file, original_source)?;
                 }
                 active_targets.clear();
+                retired_targets.clear();
                 out.push('\n');
 
                 out.push_str(&gen_please_report_this_bug_text(args.clippy));
@@ -207,12 +224,22 @@ fn fix(
             retain_primary_fixes(primary_packages, &mut errors, &mut build_unit_map);
         }
 
-        if iteration >= max_iterations {
-            if active_targets.is_empty() {
-                break;
-            }
-            let targets: Vec<_> = active_targets.keys().cloned().collect();
-            for target in targets {
+        if max_iterations == 0 {
+            break;
+        }
+
+        let mut finalized_targets = false;
+        // Retire targets separately so their dependents can join the next wave.
+        let targets: Vec<_> = active_targets
+            .keys()
+            .filter(|target| {
+                target_iterations.get(*target).copied().unwrap_or_default() >= max_iterations
+                    || build_unit_map.get(*target).is_none_or(IndexMap::is_empty)
+            })
+            .cloned()
+            .collect();
+        for target in targets {
+            if target_iterations.get(&target).copied().unwrap_or_default() >= max_iterations {
                 if let Some(file_map) = build_unit_map.get(&target) {
                     let target_errors = errors.entry(target.clone()).or_default();
                     target_errors.extend(
@@ -222,33 +249,27 @@ fn fix(
                             .filter_map(|(_, diagnostic)| diagnostic.clone()),
                     );
                 }
-                finish_target(target, active_targets, &mut errors, &mut seen)?;
+            } else {
+                build_unit_map.shift_remove(&target);
             }
-            claimed_files.clear();
-            iteration = 0;
+            finish_target(
+                target.clone(),
+                active_targets,
+                retired_targets,
+                &mut errors,
+                &mut seen,
+            )?;
+            claimed_files.retain(|_, owner| owner != &target);
+            target_iterations.remove(&target);
+            finalized_targets = true;
         }
 
-        let mut finalized_targets = false;
-        if !active_targets.is_empty()
-            && active_targets
-                .keys()
-                .all(|target| build_unit_map.get(target).is_none_or(IndexMap::is_empty))
-        {
-            let targets: Vec<_> = active_targets.keys().cloned().collect();
-            for target in targets {
-                build_unit_map.shift_remove(&target);
-                finish_target(target, active_targets, &mut errors, &mut seen)?;
-            }
-            debug_assert!(active_targets.is_empty());
-            claimed_files.clear();
-            iteration = 0;
-            finalized_targets = true;
+        if active_targets.is_empty() {
+            retired_targets.clear();
         }
 
         let mut made_changes = false;
         // Admit build units from one compiler snapshot only when their packages are independent.
-        // Once a batch is active, recheck and finish it before considering additional units.
-        let continuing_batch = !active_targets.is_empty();
 
         for (build_unit, file_map) in build_unit_map {
             if seen.contains(&build_unit) {
@@ -274,9 +295,6 @@ fn fix(
                 seen.insert(build_unit);
             } else if !file_map.is_empty() {
                 let was_active = active_targets.contains_key(&build_unit);
-                if continuing_batch && !was_active {
-                    continue;
-                }
 
                 if !args.dangerous_parallel_fixes && !was_active && !active_targets.is_empty() {
                     if active_targets
@@ -334,6 +352,7 @@ fn fix(
                     active_targets.shift_remove(&build_unit);
                 }
                 if changed {
+                    *target_iterations.entry(build_unit.clone()).or_default() += 1;
                     if let Some(handles) = handles {
                         for handle in handles {
                             claimed_files.entry(handle).or_insert(build_unit.clone());
@@ -359,10 +378,17 @@ fn fix(
             }
             let targets: Vec<_> = active_targets.keys().cloned().collect();
             for target in targets {
-                finish_target(target, active_targets, &mut last_errors, &mut seen)?;
+                finish_target(
+                    target,
+                    active_targets,
+                    retired_targets,
+                    &mut last_errors,
+                    &mut seen,
+                )?;
             }
             claimed_files.clear();
-            iteration = 0;
+            target_iterations.clear();
+            retired_targets.clear();
             continue;
         }
     }
@@ -378,6 +404,7 @@ fn fix(
     }
 
     active_targets.clear();
+    retired_targets.clear();
     Ok(())
 }
 
@@ -664,6 +691,7 @@ impl PackageGraph {
 fn finish_target(
     target: BuildUnit,
     active_targets: &mut IndexMap<BuildUnit, IndexMap<String, File>>,
+    retired_targets: &mut IndexMap<BuildUnit, IndexMap<String, File>>,
     errors: &mut BuildUnitErrors,
     seen: &mut HashSet<BuildUnit>,
 ) -> CargoResult<()> {
@@ -684,7 +712,9 @@ fn finish_target(
         shell::print_ansi_stderr(format!("{}\n\n", error.trim_end()).as_bytes())?;
     }
 
-    active_targets.shift_remove(&target);
+    if let Some(files) = active_targets.shift_remove(&target) {
+        retired_targets.insert(target.clone(), files);
+    }
     errors.shift_remove(&target);
     seen.insert(target);
     Ok(())

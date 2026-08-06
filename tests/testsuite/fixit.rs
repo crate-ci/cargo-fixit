@@ -124,13 +124,25 @@ metadata
 
 fn fake_cargo() -> Project {
     let fake_cargo = project()
-        .at(cargo_test_support::paths::global_root().join("fake-cargo"))
+        .at("fake-cargo")
         .file("Cargo.toml", &basic_manifest("fake-cargo", "1.0.0"))
         .file(
             "src/main.rs",
             r#"
             fn main() {
                 let args = std::env::args_os().skip(1).collect::<Vec<_>>();
+                if args.first().is_some_and(|arg| arg == "check") {
+                    if let Some(log) = std::env::var_os("FIXIT_CHECK_LOG") {
+                        use std::io::Write as _;
+
+                        let mut log = std::fs::OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open(log)
+                            .unwrap();
+                        writeln!(log, "check").unwrap();
+                    }
+                }
                 if args.first().is_some_and(|arg| arg == "metadata") {
                     if let Some(log) = std::env::var_os("FIXIT_METADATA_LOG") {
                         let args = args
@@ -511,6 +523,158 @@ fn independent_workspace_packages() {
             format!("pub fn {name}() {{ let value = 1; let _ = value; }}\n")
         );
     }
+}
+
+#[cargo_test]
+fn independent_packages_progress_while_another_retries() {
+    let fake_cargo = fake_cargo();
+    let p = rolling_wavefront_project();
+    let check_log = p.root().join("check.log");
+    let rustc_log = p.root().join("rustc.log");
+    std::fs::create_dir_all(&rustc_log).unwrap();
+
+    let mut command = cargo_test_support::process(env!("CARGO_BIN_EXE_cargo-fixit"));
+    command.cwd(p.root());
+    command.arg("fixit");
+    command.arg("--workspace");
+    command.arg("--allow-no-vcs");
+    command.env("CARGO", fake_cargo.bin("fake-cargo"));
+    command.env("FIXIT_REAL_CARGO", env!("CARGO"));
+    command.env("FIXIT_CHECK_LOG", &check_log);
+    command.env("RUSTC_WORKSPACE_WRAPPER", crate::fix::echo_wrapper());
+    command.env("__CARGO_FIXIT_RUSTC_LOG", &rustc_log);
+    cargo_test_support::execs()
+        .with_process_builder(command)
+        .run();
+
+    for path in [
+        "dependency/src/lib.rs",
+        "consumer/src/lib.rs",
+        "slow/src/lib.rs",
+    ] {
+        assert!(!p.read_file(path).contains("let mut"));
+    }
+    assert_eq!(p.read_file("check.log").lines().count(), 3);
+    assert_eq!(
+        crate::fix::rustc_invocations(&rustc_log, ["dependency", "consumer", "slow"]),
+        [2, 3, 3]
+    );
+}
+
+#[cargo_test]
+fn rolling_wavefront_restores_retired_packages_on_failure() {
+    let p = rolling_wavefront_project();
+    let original_dependency = p.read_file("dependency/src/lib.rs");
+    let original_consumer = p.read_file("consumer/src/lib.rs");
+    let original_slow = p.read_file("slow/src/lib.rs");
+
+    p.cargo_("fixit --workspace --allow-no-vcs")
+        .env("FIXIT_BREAK_AFTER_FIXES", "1")
+        .with_status(101)
+        .with_stderr_contains("[NOTE] reverting `dependency/src/lib.rs` to its original state")
+        .run();
+
+    assert_eq!(p.read_file("dependency/src/lib.rs"), original_dependency);
+    assert_eq!(p.read_file("consumer/src/lib.rs"), original_consumer);
+    assert_eq!(p.read_file("slow/src/lib.rs"), original_slow);
+}
+
+#[cargo_test]
+fn rolling_wavefront_restores_shared_files_in_reverse_order() {
+    let p = rolling_wavefront_project();
+    p.change_file(
+        "dependency/Cargo.toml",
+        &format!(
+            "{}\n[features]\ndefault = ['first']\nfirst = []\nsecond = []\n",
+            basic_manifest("dependency", "0.1.0")
+        ),
+    );
+    p.change_file(
+        "dependency/src/lib.rs",
+        "#[cfg(feature = \"first\")]\npub fn dependency() -> usize { let mut first = 1; first }\n\n#[cfg(feature = \"second\")]\npub fn shared() -> usize { let mut second = 1; second }\n",
+    );
+    p.change_file(
+        "consumer/Cargo.toml",
+        &format!(
+            "{}\n[features]\ndefault = ['second']\nfirst = []\nsecond = []\n\n[dependencies]\ndependency = {{ path = '../dependency' }}\n",
+            basic_manifest("consumer", "0.1.0")
+        ),
+    );
+    p.change_file(
+        "consumer/src/lib.rs",
+        "#[path = \"../../dependency/src/lib.rs\"]\nmod shared;\npub fn consumer() -> usize { dependency::dependency() + shared::shared() }\n",
+    );
+    let original_shared = p.read_file("dependency/src/lib.rs");
+
+    p.cargo_("fixit --workspace --allow-no-vcs")
+        .env("FIXIT_BREAK_AFTER_FIXES", "1")
+        .with_status(101)
+        .with_stderr_contains("[NOTE] reverting `dependency/src/lib.rs` to its original state")
+        .run();
+
+    assert_eq!(p.read_file("dependency/src/lib.rs"), original_shared);
+}
+
+fn rolling_wavefront_project() -> Project {
+    project()
+        .file(
+            "Cargo.toml",
+            "[workspace]\nmembers = ['dependency', 'consumer', 'slow']\nresolver = '2'\n",
+        )
+        .file("dependency/Cargo.toml", &basic_manifest("dependency", "0.1.0"))
+        .file(
+            "dependency/src/lib.rs",
+            "pub fn dependency() -> usize { let mut value = 1; value }\n",
+        )
+        .file(
+            "consumer/Cargo.toml",
+            &format!(
+                "{}\n[dependencies]\ndependency = {{ path = '../dependency' }}\n",
+                basic_manifest("consumer", "0.1.0")
+            ),
+        )
+        .file(
+            "consumer/src/lib.rs",
+            "pub fn consumer() -> usize { let mut value = dependency::dependency(); value }\n",
+        )
+        .file("slow/Cargo.toml", &basic_manifest("slow", "0.1.0"))
+        .file(
+            "slow/build.rs",
+            r#"
+                fn main() {
+                    println!("cargo:rustc-check-cfg=cfg(fixit_first)");
+                    println!("cargo:rustc-check-cfg=cfg(fixit_second)");
+                    println!("cargo:rustc-check-cfg=cfg(fixit_broken)");
+                    println!("cargo:rerun-if-changed=src/lib.rs");
+
+                    let source = std::fs::read_to_string("src/lib.rs").unwrap();
+                    if source.contains("let mut first") {
+                        println!("cargo:rustc-cfg=fixit_first");
+                    } else if source.contains("let mut second") {
+                        println!("cargo:rustc-cfg=fixit_second");
+                    } else if std::env::var_os("FIXIT_BREAK_AFTER_FIXES").is_some() {
+                        println!("cargo:rustc-cfg=fixit_broken");
+                    }
+                }
+            "#,
+        )
+        .file(
+            "slow/src/lib.rs",
+            r#"
+                #[cfg(fixit_first)]
+                pub fn slow() -> usize { let mut first = 1; first }
+
+                #[cfg(fixit_second)]
+                pub fn slow() -> usize { let mut second = 1; second }
+
+                #[cfg(not(any(fixit_first, fixit_second)))]
+                pub fn slow() -> usize { 1 }
+
+                #[cfg(fixit_broken)]
+                pub fn broken() -> usize { missing_value() }
+            "#,
+        )
+        .build()
 }
 
 #[cargo_test]
