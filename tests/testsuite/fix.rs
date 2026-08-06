@@ -28,9 +28,7 @@ pub(crate) fn echo_wrapper() -> PathBuf {
         .file(
             "src/main.rs",
             r#"
-            use std::fs::OpenOptions;
             use std::fs::read_to_string;
-            use std::io::Write as _;
             use std::path::PathBuf;
             fn main() {
                 // Handle args from `@path` argfile for rustc
@@ -41,20 +39,6 @@ pub(crate) fn echo_wrapper() -> PathBuf {
                         vec![p]
                     })
                 .collect::<Vec<_>>();
-                if let Some(path) = std::env::var_os("__CARGO_FIXIT_RUSTC_LOG") {
-                    let path = PathBuf::from(path);
-                    if let Some(crate_name) = args
-                        .windows(2)
-                        .find_map(|args| (args[0] == "--crate-name").then_some(&args[1]))
-                    {
-                        let mut log = OpenOptions::new()
-                            .append(true)
-                            .create(true)
-                            .open(path.join(crate_name))
-                            .unwrap();
-                        writeln!(log, "{crate_name}").unwrap();
-                    }
-                }
                 eprintln!("WRAPPER CALLED: {}", args[1..].join(" "));
                 let status = std::process::Command::new(&args[1])
                     .args(&args[2..]).status().unwrap();
@@ -67,18 +51,6 @@ pub(crate) fn echo_wrapper() -> PathBuf {
     let path = p.bin("rustc-echo-wrapper");
     *lock = Some(path.clone());
     path
-}
-
-pub(crate) fn rustc_invocations<const N: usize>(
-    path: &Path,
-    crate_names: [&str; N],
-) -> [usize; N] {
-    crate_names.map(|crate_name| {
-        std::fs::read_to_string(path.join(crate_name))
-            .unwrap()
-            .lines()
-            .count()
-    })
 }
 
 pub(crate) trait FixitProject {
