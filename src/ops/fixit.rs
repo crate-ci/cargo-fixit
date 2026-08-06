@@ -39,6 +39,10 @@ pub struct FixitArgs {
     #[arg(long)]
     broken_code: bool,
 
+    /// Assume executable targets are independent (stale fixes may change behavior)
+    #[arg(long = "Zassume-independent-targets")]
+    assume_independent_targets: bool,
+
     /// Fix all targets together, risking stale suggestions
     #[arg(long = "Zdangerous-parallel-fixes")]
     dangerous_parallel_fixes: bool,
@@ -116,6 +120,9 @@ fn fix(
         .unwrap_or(4);
     let mut iteration = 0;
     let mut lint_cap = false;
+    let mut parallel_leaf_targets =
+        args.assume_independent_targets && !args.broken_code && !args.dangerous_parallel_fixes;
+    let mut speculative_leaf_batch = false;
 
     let mut last_errors = IndexMap::new();
     let mut claimed_files: HashMap<same_file::Handle, BuildUnit> = HashMap::new();
@@ -128,7 +135,28 @@ fn fix(
     loop {
         trace!("iteration={iteration}");
         trace!("active_targets={active_targets:?}");
+        let previous_lint_cap = lint_cap;
         let (messages, exit_code) = check(args, &mut lint_cap)?;
+
+        // Executable targets can still read one another's sources indirectly.
+        if exit_code != Some(0) && speculative_leaf_batch {
+            for (file, original) in active_targets
+                .values()
+                .rev()
+                .flat_map(|files| files.iter().rev())
+            {
+                paths::write(file, &original.original_source)?;
+            }
+            active_targets.clear();
+            claimed_files.clear();
+            target_iterations.clear();
+            last_errors.clear();
+            iteration = 0;
+            lint_cap = previous_lint_cap;
+            parallel_leaf_targets = false;
+            speculative_leaf_batch = false;
+            continue;
+        }
 
         if messages.is_empty() && exit_code != Some(0) {
             let mut command = args.to_command();
@@ -229,12 +257,20 @@ fn fix(
         }
 
         let mut finalized_targets = false;
-        // Retire targets separately so their dependents can join the next wave.
+        let is_ready = |target: &BuildUnit| {
+            target_iterations.get(target).copied().unwrap_or_default() >= max_iterations
+                || build_unit_map.get(target).is_none_or(IndexMap::is_empty)
+        };
+        // Retire targets separately, but keep speculative same-package cohorts together.
         let targets: Vec<_> = active_targets
             .keys()
             .filter(|target| {
-                target_iterations.get(*target).copied().unwrap_or_default() >= max_iterations
-                    || build_unit_map.get(*target).is_none_or(IndexMap::is_empty)
+                is_ready(target)
+                    && (!speculative_leaf_batch
+                        || active_targets
+                            .keys()
+                            .filter(|peer| peer.package_id == target.package_id)
+                            .all(&is_ready))
             })
             .cloned()
             .collect();
@@ -264,12 +300,20 @@ fn fix(
             finalized_targets = true;
         }
 
+        if speculative_leaf_batch {
+            let mut active_packages = HashSet::new();
+            speculative_leaf_batch = active_targets
+                .keys()
+                .any(|target| !active_packages.insert(&target.package_id));
+        }
+
         if active_targets.is_empty() {
             retired_targets.clear();
+            speculative_leaf_batch = false;
         }
 
         let mut made_changes = false;
-        // Admit build units from one compiler snapshot only when their packages are independent.
+        // Admit independent packages and executable leaf targets from one compiler snapshot.
 
         for (build_unit, file_map) in build_unit_map {
             if seen.contains(&build_unit) {
@@ -295,35 +339,49 @@ fn fix(
                 seen.insert(build_unit);
             } else if !file_map.is_empty() {
                 let was_active = active_targets.contains_key(&build_unit);
+                if was_active
+                    && target_iterations
+                        .get(&build_unit)
+                        .copied()
+                        .unwrap_or_default()
+                        >= max_iterations
+                {
+                    continue;
+                }
 
                 if !args.dangerous_parallel_fixes && !was_active && !active_targets.is_empty() {
+                    if active_targets.keys().any(|active| {
+                        active.package_id == build_unit.package_id
+                            && (!parallel_leaf_targets
+                                || !active.is_executable_leaf()
+                                || !build_unit.is_executable_leaf())
+                    }) {
+                        continue;
+                    }
+
                     if active_targets
                         .keys()
-                        .any(|active| active.package_id == build_unit.package_id)
+                        .any(|active| active.package_id != build_unit.package_id)
                     {
-                        continue;
-                    }
-
-                    if package_graph_cache.is_none() {
-                        let metadata =
-                            package_metadata(&mut package_metadata_cache, &args.check_flags)?;
-                        package_graph_cache = Some(PackageGraph::load(metadata, &args.check_flags));
-                    }
-                    let Some(Some(graph)) = package_graph_cache.as_mut() else {
-                        continue;
-                    };
-
-                    let mut independent = true;
-                    for active in active_targets.keys() {
-                        if !graph
-                            .packages_are_independent(&active.package_id, &build_unit.package_id)
-                        {
-                            independent = false;
-                            break;
+                        if package_graph_cache.is_none() {
+                            let metadata =
+                                package_metadata(&mut package_metadata_cache, &args.check_flags)?;
+                            package_graph_cache =
+                                Some(PackageGraph::load(metadata, &args.check_flags));
                         }
-                    }
-                    if !independent {
-                        continue;
+                        let Some(Some(graph)) = package_graph_cache.as_mut() else {
+                            continue;
+                        };
+
+                        if active_targets.keys().any(|active| {
+                            active.package_id != build_unit.package_id
+                                && !graph.packages_are_independent(
+                                    &active.package_id,
+                                    &build_unit.package_id,
+                                )
+                        }) {
+                            continue;
+                        }
                     }
                 }
 
@@ -346,12 +404,18 @@ fn fix(
                     continue;
                 }
 
+                let joins_speculative_leaf_batch = parallel_leaf_targets
+                    && !was_active
+                    && active_targets
+                        .keys()
+                        .any(|active| active.package_id == build_unit.package_id);
                 let target_files = active_targets.entry(build_unit.clone()).or_default();
                 let changed = fix_errors(target_files, file_map, build_unit_errors)?;
                 if !changed && !was_active {
                     active_targets.shift_remove(&build_unit);
                 }
                 if changed {
+                    speculative_leaf_batch |= joins_speculative_leaf_batch;
                     *target_iterations.entry(build_unit.clone()).or_default() += 1;
                     if let Some(handles) = handles {
                         for handle in handles {
@@ -389,6 +453,7 @@ fn fix(
             claimed_files.clear();
             target_iterations.clear();
             retired_targets.clear();
+            speculative_leaf_batch = false;
             continue;
         }
     }

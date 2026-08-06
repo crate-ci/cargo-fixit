@@ -678,10 +678,14 @@ fn rolling_wavefront_project() -> Project {
 }
 
 #[cargo_test]
-fn executable_leaf_targets_are_serialized() {
+fn executable_leaf_targets_batch_only_when_independence_is_assumed() {
     let fake_cargo = fake_cargo();
 
-    for (name, broken_code) in [("default", false), ("broken", true)] {
+    for (name, assume_independent, broken_code, expected_checks) in [
+        ("default", false, false, 3),
+        ("parallel", true, false, 2),
+        ("broken", true, true, 3),
+    ] {
         let p = project()
             .at(format!("leaf-targets-{name}"))
             .file(
@@ -700,6 +704,9 @@ fn executable_leaf_targets_are_serialized() {
         command.arg("fixit");
         command.arg("--bins");
         command.arg("--allow-no-vcs");
+        if assume_independent {
+            command.arg("--Zassume-independent-targets");
+        }
         if broken_code {
             command.arg("--broken-code");
         }
@@ -710,7 +717,7 @@ fn executable_leaf_targets_are_serialized() {
             .with_process_builder(command)
             .run();
 
-        assert_eq!(p.read_file("check.log").lines().count(), 3);
+        assert_eq!(p.read_file("check.log").lines().count(), expected_checks);
         for target in ["first", "second"] {
             assert!(!p.read_file(format!("src/bin/{target}.rs")).contains("let mut"));
         }
@@ -741,6 +748,7 @@ fn executable_leaf_targets_with_shared_sources_remain_serial() {
     command.arg("fixit");
     command.arg("--bins");
     command.arg("--allow-no-vcs");
+    command.arg("--Zassume-independent-targets");
     command.env("CARGO", fake_cargo.bin("fake-cargo"));
     command.env("FIXIT_REAL_CARGO", env!("CARGO"));
     command.env("FIXIT_CHECK_LOG", &check_log);
@@ -755,7 +763,7 @@ fn executable_leaf_targets_with_shared_sources_remain_serial() {
 }
 
 #[cargo_test]
-fn executable_leaf_targets_serialize_hidden_source_dependencies() {
+fn executable_leaf_targets_retry_serially_after_hidden_source_dependency() {
     let p = project()
         .file("Cargo.toml", &basic_manifest("foo", "0.1.0"))
         .file("build.rs", interdependent_bin_build_script())
@@ -769,7 +777,7 @@ fn executable_leaf_targets_serialize_hidden_source_dependencies() {
         )
         .build();
 
-    p.cargo_("fixit --bins --jobs 1 --allow-no-vcs")
+    p.cargo_("fixit --bins --jobs 1 --allow-no-vcs --Zassume-independent-targets")
         .with_stderr_data(str![[r#"
 [CHECKING] foo v0.1.0
 [FIXED] src/bin/[..].rs (1 fix)
@@ -787,7 +795,7 @@ fn executable_leaf_targets_serialize_hidden_source_dependencies() {
 }
 
 #[cargo_test]
-fn leaf_target_fixes_preserve_retired_wavefront_targets() {
+fn speculative_leaf_failure_preserves_retired_wavefront_targets() {
     let p = rolling_wavefront_project();
     p.change_file(
         "consumer/src/lib.rs",
@@ -803,17 +811,19 @@ fn leaf_target_fixes_preserve_retired_wavefront_targets() {
         );
     }
 
-    p.cargo_("fixit --workspace --lib --bins --jobs 1 --allow-no-vcs")
-        .with_stderr_data(str![[r#"
+    p.cargo_(
+        "fixit --workspace --lib --bins --jobs 1 --allow-no-vcs --Zassume-independent-targets",
+    )
+    .with_stderr_data(str![[r#"
 [CHECKING] consumer v0.1.0
 [CHECKING] dependency v0.1.0
 [FIXED] dependency/src/lib.rs (1 fix)
+[FIXED] consumer/src/bin/[..].rs (1 fix)
 [CHECKING] slow v0.1.0
 [FIXED] slow/src/lib.rs (2 fixes)
-[FIXED] consumer/src/bin/[..].rs (1 fix)
 
 "#]])
-        .run();
+    .run();
 
     assert!(!p.read_file("dependency/src/lib.rs").contains("let mut"));
     assert!(!p.read_file("slow/src/lib.rs").contains("let mut"));

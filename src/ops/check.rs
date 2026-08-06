@@ -45,6 +45,16 @@ pub struct BuildUnit {
     pub target: Target,
 }
 
+impl BuildUnit {
+    /// Returns whether this is a binary-shaped bin, example, test, or benchmark target.
+    pub(crate) fn is_executable_leaf(&self) -> bool {
+        matches!(
+            self.target.kind.as_slice(),
+            [Kind::Bin | Kind::Example | Kind::Test | Kind::Bench]
+        ) && matches!(self.target.crate_types.as_slice(), [CrateType::Bin])
+    }
+}
+
 #[derive(Deserialize, Hash, PartialEq, Clone, Eq, Debug)]
 pub struct Target {
     kind: Vec<Kind>,
