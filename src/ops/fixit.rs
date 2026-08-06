@@ -111,6 +111,7 @@ fn fix(
 
     let mut last_errors = IndexMap::new();
     let mut claimed_files: HashMap<same_file::Handle, BuildUnit> = HashMap::new();
+    let mut target_iterations: HashMap<BuildUnit, usize> = HashMap::new();
     let mut package_metadata_cache = None;
     let mut primary_packages_cache = None;
     let mut package_graph_cache: Option<Option<PackageGraph>> = None;
@@ -210,10 +211,13 @@ fn fix(
             retain_primary_fixes(primary_packages, &mut errors, &mut build_unit_map);
         }
 
-        if iteration >= max_iterations {
-            if active_targets.is_empty() {
-                break;
-            }
+        if max_iterations == 0 {
+            break;
+        }
+
+        if active_targets.keys().any(|target| {
+            target_iterations.get(target).copied().unwrap_or_default() >= max_iterations
+        }) {
             let targets: Vec<_> = active_targets.keys().cloned().collect();
             for target in targets {
                 if let Some(file_map) = build_unit_map.get(&target) {
@@ -228,6 +232,7 @@ fn fix(
                 finish_target(target, active_targets, &mut errors, &mut seen)?;
             }
             claimed_files.clear();
+            target_iterations.clear();
             iteration = 0;
         }
 
@@ -244,6 +249,7 @@ fn fix(
             }
             debug_assert!(active_targets.is_empty());
             claimed_files.clear();
+            target_iterations.clear();
             iteration = 0;
             finalized_targets = true;
         }
@@ -337,6 +343,7 @@ fn fix(
                     active_targets.shift_remove(&build_unit);
                 }
                 if changed {
+                    *target_iterations.entry(build_unit.clone()).or_default() += 1;
                     if let Some(handles) = handles {
                         for handle in handles {
                             claimed_files.entry(handle).or_insert(build_unit.clone());
@@ -365,6 +372,7 @@ fn fix(
                 finish_target(target, active_targets, &mut last_errors, &mut seen)?;
             }
             claimed_files.clear();
+            target_iterations.clear();
             iteration = 0;
             continue;
         }
