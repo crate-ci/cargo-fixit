@@ -13,6 +13,7 @@ use cargo_metadata::Metadata;
 use cargo_metadata::MetadataCommand;
 use cargo_util::paths;
 use cargo_util_schemas::core::PackageIdSpec;
+use clap::ArgAction;
 use clap::Parser;
 use indexmap::{IndexMap, IndexSet};
 use rustfix::{collect_suggestions, CodeFix, Suggestion};
@@ -21,7 +22,7 @@ use tracing::{trace, warn};
 use crate::util::cli::PackageSelection;
 use crate::{
     core::{shell, sysroot::get_sysroot},
-    ops::check::{BuildUnit, CheckOutput, DiagnosticLevel, Message, MessageDiagnostic},
+    ops::check::{BuildUnit, CheckOutput, DiagnosticLevel, Message, MessageDiagnostic, TargetKind},
     util::{
         cli::CheckFlags, messages::gen_please_report_this_bug_text, package::format_package_id,
         vcs::VcsOpts,
@@ -51,6 +52,9 @@ pub struct FixitArgs {
 
     #[command(flatten)]
     check_flags: CheckFlags,
+
+    #[arg(long, action = ArgAction::Count)]
+    verbose: u8,
 }
 
 impl FixitArgs {
@@ -117,6 +121,7 @@ fn fix(
         trace!("iteration={iteration}");
         trace!("active_targets={active_targets:?}");
         let (messages, exit_code) = check(args, &mut lint_cap)?;
+        print_built(args, &messages)?;
 
         if messages.is_empty() && exit_code != Some(0) {
             let mut command = args.to_command();
@@ -165,6 +170,7 @@ fn fix(
                 }
 
                 let (messages, _) = check(args, &mut lint_cap)?;
+                print_built(args, &messages)?;
                 let mut errors = messages
                     .into_iter()
                     .filter_map(|e| match e {
@@ -709,6 +715,40 @@ fn check(args: &FixitArgs, lint_cap: &mut bool) -> CargoResult<(Vec<CheckOutput>
     }
 
     Ok(output)
+}
+
+fn print_built(args: &FixitArgs, messages: &[CheckOutput]) -> CargoResult<()> {
+    if args.verbose == 0 {
+        return Ok(());
+    }
+
+    for message in messages {
+        match message {
+            CheckOutput::Message(_) => {}
+            CheckOutput::Artifact(a) => {
+                if !a.fresh {
+                    let pkg_id = format_package_id(&a.build_unit.package_id)?;
+                    let name = &a.build_unit.target.name;
+                    let kind = &a.build_unit.target.kind;
+                    let kind = if 1 < kind.len() {
+                        "lib" // HACK: if its multiple, it is only a lib
+                    } else {
+                        match &kind[0] {
+                            TargetKind::Bin => "bin",
+                            TargetKind::Test => "test",
+                            TargetKind::Bench => "bench",
+                            TargetKind::Example => "example",
+                            TargetKind::CustomBuild => "custom-build",
+                            TargetKind::Lib(_) => "lib",
+                        }
+                    };
+                    shell::status("Checked", format!("{pkg_id} - {name} ({kind})"))?;
+                }
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// Applies the original lint cap while preserving existing compiler flags.

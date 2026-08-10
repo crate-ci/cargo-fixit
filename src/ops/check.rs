@@ -47,14 +47,14 @@ pub struct BuildUnit {
 
 #[derive(Deserialize, Hash, PartialEq, Clone, Eq, Debug)]
 pub struct Target {
-    kind: Vec<TargetKind>,
-    crate_types: Vec<CrateType>,
-    name: String,
-    src_path: String,
-    edition: String,
-    doc: bool,
-    doctest: bool,
-    test: bool,
+    pub kind: Vec<TargetKind>,
+    pub crate_types: Vec<CrateType>,
+    pub name: String,
+    pub src_path: String,
+    pub edition: String,
+    pub doc: bool,
+    pub doctest: bool,
+    pub test: bool,
 }
 
 #[derive(Deserialize, Hash, PartialEq, Clone, Eq, Debug)]

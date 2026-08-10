@@ -1594,15 +1594,9 @@ fn does_not_crash_with_rustc_wrapper() {
     p.build_dir().rm_rf();
     p.cargo_("fix --allow-no-vcs --verbose")
         .env("RUSTC_WORKSPACE_WRAPPER", echo_wrapper())
-        .with_status(2)
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--verbose' found
-
-  tip: a similar argument exists: '--version'
-
-Usage: cargo fixit --allow-no-vcs --version
-
-For more information, try '--help'.
+     Checked foo v0.1.0 - foo (lib)
+[CHECKING] foo v0.1.0
 
 "#]])
         .run();
@@ -1626,16 +1620,10 @@ fn uses_workspace_wrapper_and_primary_wrapper_override() {
     p.cargo_("fix --allow-no-vcs --verbose")
         .env("RUSTC_WORKSPACE_WRAPPER", echo_wrapper())
         .with_stderr_data(str![[r#"
-[ERROR] unexpected argument '--verbose' found
-
-  tip: a similar argument exists: '--version'
-
-Usage: cargo fixit --allow-no-vcs --version
-
-For more information, try '--help'.
+     Checked foo v0.1.0 - foo (lib)
+[CHECKING] foo v0.1.0
 
 "#]])
-        .with_status(2)
         .run();
 }
 
