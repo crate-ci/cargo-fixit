@@ -47,7 +47,7 @@ pub struct BuildUnit {
 
 #[derive(Deserialize, Hash, PartialEq, Clone, Eq, Debug)]
 pub struct Target {
-    kind: Vec<Kind>,
+    kind: Vec<TargetKind>,
     crate_types: Vec<CrateType>,
     name: String,
     src_path: String,
@@ -59,20 +59,14 @@ pub struct Target {
 
 #[derive(Deserialize, Hash, PartialEq, Clone, Eq, Debug)]
 #[serde(rename_all(deserialize = "kebab-case"))]
-pub enum Kind {
+pub enum TargetKind {
     Bin,
-    Example,
     Test,
     Bench,
+    Example,
     CustomBuild,
-    Lib,
-    Rlib,
-    Dylib,
-    Cdylib,
-    Staticlib,
-    ProcMacro,
     #[serde(untagged)]
-    Other(String),
+    Lib(CrateType),
 }
 
 #[derive(Deserialize, Hash, PartialEq, Clone, Eq, Debug)]
