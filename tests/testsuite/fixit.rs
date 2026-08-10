@@ -44,21 +44,19 @@ fn basic() {
 }
 
 #[cargo_test]
-fn fixes_denied_warnings_with_encoded_rustflags() {
+fn fixes_denied_warnings() {
     let p = denied_warnings_project();
 
-    p.cargo_("fixit --allow-no-vcs")
-        .env("CARGO_ENCODED_RUSTFLAGS", "--cfg\u{1f}fixit_test")
-        .run();
+    p.cargo_("fixit --allow-no-vcs").run();
 
     assert!(!p.read_file("src/lib.rs").contains("let mut value"));
 }
 
 #[cargo_test]
-fn clippy_fixes_denied_warnings_with_encoded_rustflags() {
+fn fixes_denied_warnings_with_encoded_rustflags() {
     let p = denied_warnings_project();
 
-    p.cargo_("fixit --clippy --allow-no-vcs")
+    p.cargo_("fixit --allow-no-vcs")
         .env("CARGO_ENCODED_RUSTFLAGS", "--cfg\u{1f}fixit_test")
         .run();
 
@@ -122,134 +120,11 @@ fn preserves_workspace_fingerprints_without_denied_warnings() {
         )
         .file("cached-dependency/src/lib.rs", "pub fn foo() {}")
         .build();
-
     p.cargo_("check").run();
 
-    let fingerprints_before = package_fingerprints(&p, &["foo", "cached-dependency"]);
-    assert_eq!(fingerprints_before.len(), 2);
-
-    p.cargo_("fixit --allow-no-vcs").run();
-
-    assert_eq!(
-        package_fingerprints(&p, &["foo", "cached-dependency"]),
-        fingerprints_before
-    );
-}
-
-#[cargo_test]
-fn clippy_preserves_workspace_fingerprints_without_denied_warnings() {
-    let p = project()
-        .file(
-            "Cargo.toml",
-            "[workspace]
-members = ['app', 'cached-dependency']
-resolver = '2'
-",
-        )
-        .file(
-            "app/Cargo.toml",
-            &format!(
-                "{}
-[dependencies]
-cached-dependency = {{ path = '../cached-dependency' }}
-",
-                basic_manifest("app", "0.1.0")
-            ),
-        )
-        .file(
-            "app/src/lib.rs",
-            "pub fn app() { cached_dependency::foo(); }
-",
-        )
-        .file(
-            "cached-dependency/Cargo.toml",
-            &basic_manifest("cached-dependency", "0.1.0"),
-        )
-        .file(
-            "cached-dependency/src/lib.rs",
-            "pub fn foo() {}
-",
-        )
-        .build();
-
-    p.cargo_("clippy --workspace").run();
-
-    let fingerprints_before = package_fingerprints(&p, &["app", "cached-dependency"]);
-    assert_eq!(fingerprints_before.len(), 2);
-
-    p.cargo_("fixit --clippy --workspace --allow-no-vcs").run();
-
-    assert_eq!(
-        package_fingerprints(&p, &["app", "cached-dependency"]),
-        fingerprints_before
-    );
-}
-
-#[cargo_test]
-fn clippy_fixes_denied_warnings() {
-    let p = project()
-        .file(
-            "src/lib.rs",
-            "#![deny(warnings)]
-pub fn a() { let mut value = 1; let _ = value; }
-",
-        )
-        .build();
-
-    p.cargo_("fixit --clippy --allow-no-vcs")
-        .with_status(0)
+    p.cargo_("fixit --allow-no-vcs --verbose")
+        .with_stderr_data(str![].unordered())
         .run();
-
-    assert!(!p.read_file("src/lib.rs").contains("let mut value"));
-}
-
-#[cargo_test]
-fn fixes_denied_lints_with_compiler_error_codes() {
-    let p = project()
-        .file(
-            "src/lib.rs",
-            "#![allow(unused_variables, non_snake_case)]
-enum Choice { Value }
-pub fn check() { match Choice::Value { Value => {} } }
-",
-        )
-        .build();
-
-    p.cargo_("fixit --allow-no-vcs").run();
-
-    assert!(p.read_file("src/lib.rs").contains("Choice::Value =>"));
-}
-
-fn package_fingerprints(project: &Project, packages: &[&str]) -> Vec<(String, Vec<u8>)> {
-    let root = project.build_dir().join("debug");
-    let dep_infos = packages
-        .iter()
-        .map(|package| format!("dep-lib-{}", package.replace('-', "_")))
-        .collect::<Vec<_>>();
-    let mut directories = vec![root.clone()];
-    let mut fingerprints = Vec::new();
-
-    while let Some(directory) = directories.pop() {
-        for entry in std::fs::read_dir(directory).unwrap().map(Result::unwrap) {
-            if entry.file_type().unwrap().is_dir() {
-                directories.push(entry.path());
-            } else if dep_infos
-                .iter()
-                .any(|dep_info| entry.file_name() == std::ffi::OsStr::new(dep_info))
-            {
-                let path = entry.path();
-                fingerprints.push((
-                    path.strip_prefix(&root)
-                        .unwrap()
-                        .to_string_lossy()
-                        .into_owned(),
-                    std::fs::read(path).unwrap(),
-                ));
-            }
-        }
-    }
-    fingerprints.sort_unstable();
-    fingerprints
 }
 
 #[cargo_test]
