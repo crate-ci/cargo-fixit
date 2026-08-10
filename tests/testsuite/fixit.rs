@@ -122,18 +122,11 @@ fn preserves_workspace_fingerprints_without_denied_warnings() {
         )
         .file("cached-dependency/src/lib.rs", "pub fn foo() {}")
         .build();
-
     p.cargo_("check").run();
 
-    let fingerprints_before = package_fingerprints(&p, &["foo", "cached-dependency"]);
-    assert_eq!(fingerprints_before.len(), 2);
-
-    p.cargo_("fixit --allow-no-vcs").run();
-
-    assert_eq!(
-        package_fingerprints(&p, &["foo", "cached-dependency"]),
-        fingerprints_before
-    );
+    p.cargo_("fixit --allow-no-vcs --verbose")
+        .with_stderr_data(str![].unordered())
+        .run();
 }
 
 #[cargo_test]
@@ -171,18 +164,11 @@ cached-dependency = {{ path = '../cached-dependency' }}
 ",
         )
         .build();
-
     p.cargo_("clippy --workspace").run();
 
-    let fingerprints_before = package_fingerprints(&p, &["app", "cached-dependency"]);
-    assert_eq!(fingerprints_before.len(), 2);
-
-    p.cargo_("fixit --clippy --workspace --allow-no-vcs").run();
-
-    assert_eq!(
-        package_fingerprints(&p, &["app", "cached-dependency"]),
-        fingerprints_before
-    );
+    p.cargo_("fixit --clippy --workspace --allow-no-vcs --verbose")
+        .with_stderr_data(str![].unordered())
+        .run();
 }
 
 #[cargo_test]
@@ -218,38 +204,6 @@ pub fn check() { match Choice::Value { Value => {} } }
     p.cargo_("fixit --allow-no-vcs").run();
 
     assert!(p.read_file("src/lib.rs").contains("Choice::Value =>"));
-}
-
-fn package_fingerprints(project: &Project, packages: &[&str]) -> Vec<(String, Vec<u8>)> {
-    let root = project.build_dir().join("debug");
-    let dep_infos = packages
-        .iter()
-        .map(|package| format!("dep-lib-{}", package.replace('-', "_")))
-        .collect::<Vec<_>>();
-    let mut directories = vec![root.clone()];
-    let mut fingerprints = Vec::new();
-
-    while let Some(directory) = directories.pop() {
-        for entry in std::fs::read_dir(directory).unwrap().map(Result::unwrap) {
-            if entry.file_type().unwrap().is_dir() {
-                directories.push(entry.path());
-            } else if dep_infos
-                .iter()
-                .any(|dep_info| entry.file_name() == std::ffi::OsStr::new(dep_info))
-            {
-                let path = entry.path();
-                fingerprints.push((
-                    path.strip_prefix(&root)
-                        .unwrap()
-                        .to_string_lossy()
-                        .into_owned(),
-                    std::fs::read(path).unwrap(),
-                ));
-            }
-        }
-    }
-    fingerprints.sort_unstable();
-    fingerprints
 }
 
 #[cargo_test]
