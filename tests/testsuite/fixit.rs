@@ -99,7 +99,7 @@ pub fn a() { let mut value = 1; let _ = value; }
 }
 
 #[cargo_test]
-fn preserves_workspace_fingerprints_without_denied_warnings() {
+fn reuse_checks_cache() {
     let p = project()
         .file(
             "Cargo.toml",
