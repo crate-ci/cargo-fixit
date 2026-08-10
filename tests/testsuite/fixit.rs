@@ -179,6 +179,90 @@ fn fixable_and_unfixable() {
     );
 }
 
+#[cargo_test]
+fn print_errors_after_fixed() {
+    let p = project()
+        .file(
+            "Cargo.toml",
+            r#"
+            [workspace]
+            members = [ "a", "b" ]
+            "#,
+        )
+        .file(
+            "a/Cargo.toml",
+            r#"
+                [package]
+                name = "a"
+                version = "0.1.0"
+                edition = "2024"
+
+                [dependencies]
+                b = { path = "../b" }
+            "#,
+        )
+        .file("a/src/lib.rs", "use std as foo; fn bar() {}")
+        .file("b/Cargo.toml", &basic_manifest("b", "0.1.0"))
+        .file("b/src/lib.rs", "use std as foo; fn bar() {}")
+        .build();
+
+    p.cargo_("fixit --allow-no-vcs")
+        .with_status(0)
+        .with_stderr_data(str![[r#"
+[CHECKING] b v0.1.0
+[FIXED] b/src/lib.rs (1 fix)
+[WARNING] function `bar` is never used
+ --> b/src/lib.rs:1:5
+  |
+1 |  fn bar() {}
+  |     ^^^
+  |
+  = [NOTE] `#[warn(dead_code)]` [..]on by default
+
+[CHECKING] a v0.1.0
+[FIXED] a/src/lib.rs (1 fix)
+[WARNING] function `bar` is never used
+ --> a/src/lib.rs:1:5
+  |
+1 |  fn bar() {}
+  |     ^^^
+  |
+  = [NOTE] `#[warn(dead_code)]` [..]on by default
+
+
+"#]])
+        .run();
+}
+
+#[cargo_test]
+fn non_json_error() {
+    let p = project()
+        .file("Cargo.toml", "[")
+        .file(
+            "src/lib.rs",
+            r#"
+            pub fn a() {
+                let mut b = 10;
+                let _ = b;
+            }
+            "#,
+        )
+        .build();
+
+    p.cargo_("fixit --allow-no-vcs")
+        .with_status(101)
+        .with_stderr_data(str![[r#"
+[ERROR] unquoted keys cannot be empty, expected letters, numbers, `-`, `_`
+ --> Cargo.toml:1:2
+  |
+1 | [
+  |  ^
+[ERROR] could not compile
+
+"#]])
+        .run();
+}
+
 #[cfg(unix)]
 #[cargo_test]
 fn restores_prior_writes_when_later_write_fails() {
@@ -668,88 +752,4 @@ codegen::generate!();
         .read_file("consumer/src/lib.rs")
         .contains("use std::mem::replace;"));
     p.cargo_("check --workspace").run();
-}
-
-#[cargo_test]
-fn print_errors_after_fixed() {
-    let p = project()
-        .file(
-            "Cargo.toml",
-            r#"
-            [workspace]
-            members = [ "a", "b" ]
-            "#,
-        )
-        .file(
-            "a/Cargo.toml",
-            r#"
-                [package]
-                name = "a"
-                version = "0.1.0"
-                edition = "2024"
-
-                [dependencies]
-                b = { path = "../b" }
-            "#,
-        )
-        .file("a/src/lib.rs", "use std as foo; fn bar() {}")
-        .file("b/Cargo.toml", &basic_manifest("b", "0.1.0"))
-        .file("b/src/lib.rs", "use std as foo; fn bar() {}")
-        .build();
-
-    p.cargo_("fixit --allow-no-vcs")
-        .with_status(0)
-        .with_stderr_data(str![[r#"
-[CHECKING] b v0.1.0
-[FIXED] b/src/lib.rs (1 fix)
-[WARNING] function `bar` is never used
- --> b/src/lib.rs:1:5
-  |
-1 |  fn bar() {}
-  |     ^^^
-  |
-  = [NOTE] `#[warn(dead_code)]` [..]on by default
-
-[CHECKING] a v0.1.0
-[FIXED] a/src/lib.rs (1 fix)
-[WARNING] function `bar` is never used
- --> a/src/lib.rs:1:5
-  |
-1 |  fn bar() {}
-  |     ^^^
-  |
-  = [NOTE] `#[warn(dead_code)]` [..]on by default
-
-
-"#]])
-        .run();
-}
-
-#[cargo_test]
-fn non_json_error() {
-    let p = project()
-        .file("Cargo.toml", "[")
-        .file(
-            "src/lib.rs",
-            r#"
-            pub fn a() {
-                let mut b = 10;
-                let _ = b;
-            }
-            "#,
-        )
-        .build();
-
-    p.cargo_("fixit --allow-no-vcs")
-        .with_status(101)
-        .with_stderr_data(str![[r#"
-[ERROR] unquoted keys cannot be empty, expected letters, numbers, `-`, `_`
- --> Cargo.toml:1:2
-  |
-1 | [
-  |  ^
-[ERROR] could not compile
-
-"#]])
-        .run();
 }
