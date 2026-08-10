@@ -251,7 +251,37 @@ resolver = "2"
 }
 
 #[cargo_test]
-fn independent_workspace_packages() {
+fn fix_order_build_unit() {
+    let p = project()
+        .file(
+            "Cargo.toml",
+            &format!(
+                "{}
+[[bin]]
+name = \"app\"
+path = \"src/main.rs\"
+",
+                basic_manifest("foo", "0.1.0")
+            ),
+        )
+        .file("build.rs", "fn main(){ let mut a = 1; let _ = a; }")
+        .file("src/lib.rs", "fn _a(){ let mut a = 1; let _ = a; }")
+        .file("src/main.rs", "fn main(){ let mut a = 1; let _ = a; }")
+        .build();
+
+    p.cargo_("fixit --allow-no-vcs")
+        .with_stderr_data(str![[r#"
+[CHECKING] foo v0.1.0
+[FIXED] build.rs (1 fix)
+[FIXED] src/lib.rs (1 fix)
+[FIXED] src/main.rs (1 fix)
+
+"#]])
+        .run();
+}
+
+#[cargo_test]
+fn fix_order_independent_packages() {
     let p = project()
         .file(
             "Cargo.toml",
@@ -274,36 +304,114 @@ resolver = "2"
         )
         .build();
 
-    p.cargo_("fixit --workspace --allow-no-vcs")
+    p.cargo_("fixit --workspace --allow-no-vcs --verbose")
         .with_status(0)
         .with_stderr_data(
             str![[r#"
-[CHECKING] a v0.1.0
-[FIXED] a/src/lib.rs (1 fix)
+     Checked b v0.1.0 - b (lib)
+     Checked a v0.1.0 - a (lib)
+     Checked a v0.1.0 - a (lib)
+     Checked b v0.1.0 - b (lib)
 [CHECKING] b v0.1.0
 [FIXED] b/src/lib.rs (1 fix)
+[CHECKING] a v0.1.0
+[FIXED] a/src/lib.rs (1 fix)
 
 "#]]
             .unordered(),
         )
         .run();
-
-    for name in ["a", "b"] {
-        assert_eq!(
-            p.read_file(format!("{name}/src/lib.rs")),
-            format!(
-                "pub fn {name}() {{ let value = 1; let _ = value; }}
-"
-            )
-        );
-    }
 }
 
 #[cargo_test]
-fn hardlinked_workspace_packages() {
+fn fix_order_serial_packages() {
+    let p = project()
+        .file(
+            "Cargo.toml",
+            r#"
+            [workspace]
+            members = [ "a", "b", "c", "d" ]
+            "#,
+        )
+        .file(
+            "a/Cargo.toml",
+            r#"
+                [package]
+                name = "a"
+                version = "0.1.0"
+                edition = "2024"
+
+                [dependencies]
+                b = { path = "../b" }
+            "#,
+        )
+        .file("a/src/lib.rs", "use std as foo;")
+        .file(
+            "b/Cargo.toml",
+            r#"
+                [package]
+                name = "b"
+                version = "0.1.0"
+                edition = "2024"
+
+                [dependencies]
+                c = { path = "../c" }
+            "#,
+        )
+        .file("b/src/lib.rs", "use std as foo;")
+        .file(
+            "c/Cargo.toml",
+            r#"
+                [package]
+                name = "c"
+                version = "0.1.0"
+                edition = "2024"
+
+                [dependencies]
+                d = { path = "../d" }
+            "#,
+        )
+        .file("c/src/lib.rs", "use std as foo;")
+        .file("d/Cargo.toml", &basic_manifest("d", "0.1.0"))
+        .file("d/src/lib.rs", "use std as foo;")
+        .build();
+
+    p.cargo_("fixit --workspace --allow-no-vcs --verbose")
+        .with_status(0)
+        .with_stderr_data(
+            str![[r#"
+     Checked d v0.1.0 - d (lib)
+     Checked c v0.1.0 - c (lib)
+     Checked b v0.1.0 - b (lib)
+     Checked a v0.1.0 - a (lib)
+     Checked d v0.1.0 - d (lib)
+     Checked c v0.1.0 - c (lib)
+     Checked b v0.1.0 - b (lib)
+     Checked a v0.1.0 - a (lib)
+[CHECKING] d v0.1.0
+[FIXED] d/src/lib.rs (1 fix)
+     Checked c v0.1.0 - c (lib)
+     Checked b v0.1.0 - b (lib)
+     Checked a v0.1.0 - a (lib)
+[CHECKING] c v0.1.0
+[FIXED] c/src/lib.rs (1 fix)
+     Checked b v0.1.0 - b (lib)
+     Checked a v0.1.0 - a (lib)
+[CHECKING] b v0.1.0
+[FIXED] b/src/lib.rs (1 fix)
+     Checked a v0.1.0 - a (lib)
+[CHECKING] a v0.1.0
+[FIXED] a/src/lib.rs (1 fix)
+
+"#]]
+            .unordered(),
+        )
+        .run();
+}
+
+#[cargo_test]
+fn fix_order_hardlinked_workspace_packages() {
     let original = "pub fn sample() -> usize { let mut value = 1; value }
-";
-    let fixed = "pub fn sample() -> usize { let value = 1; value }
 ";
     let p = project()
         .file(
@@ -324,17 +432,24 @@ resolver = "2"
     std::fs::remove_file(&hardlink).unwrap();
     std::fs::hard_link(&source, &hardlink).unwrap();
 
-    p.cargo_("fixit --workspace --allow-no-vcs --broken-code")
-        .run();
+    p.cargo_("fixit --workspace --allow-no-vcs --broken-code --verbose")
+        .with_stderr_data(
+            str![[r#"
+     Checked b v0.1.0 - b (lib)
+     Checked a v0.1.0 - a (lib)
+     Checked b v0.1.0 - b (lib)
+     Checked a v0.1.0 - a (lib)
+[CHECKING] b v0.1.0
+[FIXED] b/src/lib.rs (1 fix)
 
-    assert_eq!(p.read_file("a/src/lib.rs"), fixed);
-    assert_eq!(p.read_file("b/src/lib.rs"), fixed);
-    assert!(same_file::is_same_file(&source, &hardlink).unwrap());
-    p.cargo_("check --workspace").run();
+"#]]
+            .unordered(),
+        )
+        .run();
 }
 
 #[cargo_test]
-fn dev_dependency_cycle_is_fixed_sequentially() {
+fn fix_order_dev_dependency_cycle_is_fixed_sequentially() {
     let p = project()
         .file(
             "Cargo.toml",
@@ -396,18 +511,46 @@ a = {{ path = '../a' }}
         )
         .build();
 
-    p.cargo_("fixit --workspace --all-targets --allow-no-vcs")
-        .run();
+    p.cargo_("fixit --workspace --all-targets --allow-no-vcs --verbose")
+        .with_stderr_data(
+            str![[r#"
+     Checked a v0.1.0 - a (lib)
+     Checked c v0.1.0 - c (lib)
+     Checked c v0.1.0 - c (lib)
+     Checked b v0.1.0 - b (lib)
+     Checked b v0.1.0 - b (lib)
+     Checked a v0.1.0 - a (lib)
+     Checked a v0.1.0 - cycle (test)
+     Checked a v0.1.0 - a (lib)
+     Checked c v0.1.0 - c (lib)
+     Checked c v0.1.0 - c (lib)
+     Checked b v0.1.0 - b (lib)
+     Checked b v0.1.0 - b (lib)
+     Checked a v0.1.0 - a (lib)
+     Checked a v0.1.0 - cycle (test)
+[CHECKING] a v0.1.0
+[FIXED] a/src/lib.rs (1 fix)
+     Checked c v0.1.0 - c (lib)
+     Checked c v0.1.0 - c (lib)
+     Checked b v0.1.0 - b (lib)
+     Checked b v0.1.0 - b (lib)
+     Checked a v0.1.0 - a (lib)
+     Checked a v0.1.0 - cycle (test)
+[CHECKING] c v0.1.0
+[FIXED] c/src/lib.rs (1 fix)
+     Checked b v0.1.0 - b (lib)
+     Checked b v0.1.0 - b (lib)
+     Checked a v0.1.0 - a (lib)
+     Checked a v0.1.0 - cycle (test)
+[CHECKING] b v0.1.0
+[FIXED] b/src/lib.rs (1 fix)
+     Checked a v0.1.0 - cycle (test)
+[FIXED] a/tests/cycle.rs (1 fix)
 
-    for path in [
-        "a/src/lib.rs",
-        "a/tests/cycle.rs",
-        "b/src/lib.rs",
-        "c/src/lib.rs",
-    ] {
-        assert!(!p.read_file(path).contains("let mut"));
-    }
-    p.cargo_("check --workspace --all-targets").run();
+"#]]
+            .unordered(),
+        )
+        .run();
 }
 
 #[cargo_test]
