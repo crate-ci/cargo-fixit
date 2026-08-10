@@ -398,6 +398,36 @@ path = \"src/main.rs\"
 }
 
 #[cargo_test]
+fn fix_order_multiple_lib_crate_types() {
+    let p = project()
+        .file(
+            "Cargo.toml",
+            &format!(
+                r#"{}
+[lib]
+crate-type = ["rlib", "cdylib"]
+"#,
+                basic_manifest("foo", "0.1.0")
+            ),
+        )
+        .file(
+            "src/lib.rs",
+            "pub fn foo() { let mut value = 1; let _ = value; }",
+        )
+        .build();
+
+    p.cargo_("fixit --allow-no-vcs --verbose")
+        .with_stderr_data(str![[r#"
+     Checked foo v0.1.0 - foo (lib)
+     Checked foo v0.1.0 - foo (lib)
+[CHECKING] foo v0.1.0
+[FIXED] src/lib.rs (1 fix)
+
+"#]])
+        .run();
+}
+
+#[cargo_test]
 fn fix_order_host_target_dependency() {
     let p = project()
         .file(
@@ -493,20 +523,72 @@ fn foo() {
 }
 ",
         )
+        .file(
+            "tests/test_a.rs",
+            "
+fn _a(){ let mut a = 1; let _ = a; }
+
+#[test]
+fn foo() {
+    let mut a = 1;
+    let _ = a;
+}
+",
+        )
+        .file(
+            "tests/test_b.rs",
+            "
+fn _a(){ let mut a = 1; let _ = a; }
+
+#[test]
+fn foo() {
+    let mut a = 1;
+    let _ = a;
+}
+",
+        )
+        .file(
+            "examples/examp_a.rs",
+            "
+fn main(){ let mut a = 1; let _ = a; }
+",
+        )
+        .file(
+            "examples/examp_b.rs",
+            "
+fn main(){ let mut a = 1; let _ = a; }
+",
+        )
         .build();
 
     p.cargo_("fixit --allow-no-vcs --all-targets --verbose")
         .with_stderr_data(str![[r#"
      Checked foo v0.1.0 - app (bin)
      Checked foo v0.1.0 - app (bin)
+     Checked foo v0.1.0 - test_a (test)
+     Checked foo v0.1.0 - test_b (test)
+     Checked foo v0.1.0 - examp_a (example)
+     Checked foo v0.1.0 - examp_b (example)
      Checked foo v0.1.0 - foo (lib)
      Checked foo v0.1.0 - foo (lib)
      Checked foo v0.1.0 - app (bin)
      Checked foo v0.1.0 - app (bin)
 [CHECKING] foo v0.1.0
 [FIXED] src/main.rs (2 fixes)
+     Checked foo v0.1.0 - test_a (test)
+[FIXED] tests/test_a.rs (2 fixes)
+     Checked foo v0.1.0 - test_b (test)
+[FIXED] tests/test_b.rs (2 fixes)
+     Checked foo v0.1.0 - examp_a (example)
+[FIXED] examples/examp_a.rs (1 fix)
+     Checked foo v0.1.0 - examp_b (example)
+[FIXED] examples/examp_b.rs (1 fix)
      Checked foo v0.1.0 - app (bin)
      Checked foo v0.1.0 - app (bin)
+     Checked foo v0.1.0 - test_a (test)
+     Checked foo v0.1.0 - test_b (test)
+     Checked foo v0.1.0 - examp_a (example)
+     Checked foo v0.1.0 - examp_b (example)
      Checked foo v0.1.0 - foo (lib)
      Checked foo v0.1.0 - foo (lib)
 [FIXED] src/lib.rs (2 fixes)
@@ -774,6 +856,59 @@ a = {{ path = '../a' }}
 
 "#]])
         .run();
+}
+
+#[cargo_test]
+fn crate_fixed_on_two_targets() {
+    let p = project()
+        .file(
+            "Cargo.toml",
+            r#"[workspace]
+members = ["app", "shared"]
+resolver = "2"
+"#,
+        )
+        .file(
+            "app/Cargo.toml",
+            &format!(
+                "{}
+[dependencies]
+shared = {{ path = '../shared' }}
+
+[build-dependencies]
+shared = {{ path = '../shared' }}
+",
+                basic_manifest("app", "0.1.0")
+            ),
+        )
+        .file("app/build.rs", "fn main() { shared::shared(); }\n")
+        .file("app/src/lib.rs", "pub fn app() { shared::shared(); }\n")
+        .file("shared/Cargo.toml", &basic_manifest("shared", "0.1.0"))
+        .file(
+            "shared/src/lib.rs",
+            "pub fn shared() { let mut value = 1; let _ = value; }\n",
+        )
+        .build();
+
+    p.cargo_("fixit --workspace --target host-tuple --allow-no-vcs --verbose")
+        .with_stderr_data(str![[r#"
+     Checked app v0.1.0 - build-script-build (custom-build)
+     Checked app v0.1.0 - app (lib)
+     Checked shared v0.1.0 - shared (lib)
+     Checked shared v0.1.0 - shared (lib)
+[CHECKING] app v0.1.0
+     Checked app v0.1.0 - build-script-build (custom-build)
+     Checked app v0.1.0 - app (lib)
+     Checked shared v0.1.0 - shared (lib)
+     Checked shared v0.1.0 - shared (lib)
+[CHECKING] shared v0.1.0
+[FIXED] shared/src/lib.rs (1 fix)
+
+"#]])
+        .run();
+
+    assert!(!p.read_file("shared/src/lib.rs").contains("let mut value"));
+    p.cargo_("check --workspace --target host-tuple").run();
 }
 
 #[cargo_test]
