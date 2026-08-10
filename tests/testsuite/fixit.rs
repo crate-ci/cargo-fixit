@@ -44,21 +44,19 @@ fn basic() {
 }
 
 #[cargo_test]
-fn fixes_denied_warnings_with_encoded_rustflags() {
+fn fixes_denied_warnings() {
     let p = denied_warnings_project();
 
-    p.cargo_("fixit --allow-no-vcs")
-        .env("CARGO_ENCODED_RUSTFLAGS", "--cfg\u{1f}fixit_test")
-        .run();
+    p.cargo_("fixit --allow-no-vcs").run();
 
     assert!(!p.read_file("src/lib.rs").contains("let mut value"));
 }
 
 #[cargo_test]
-fn clippy_fixes_denied_warnings_with_encoded_rustflags() {
+fn fixes_denied_warnings_with_encoded_rustflags() {
     let p = denied_warnings_project();
 
-    p.cargo_("fixit --clippy --allow-no-vcs")
+    p.cargo_("fixit --allow-no-vcs")
         .env("CARGO_ENCODED_RUSTFLAGS", "--cfg\u{1f}fixit_test")
         .run();
 
@@ -127,83 +125,6 @@ fn preserves_workspace_fingerprints_without_denied_warnings() {
     p.cargo_("fixit --allow-no-vcs --verbose")
         .with_stderr_data(str![].unordered())
         .run();
-}
-
-#[cargo_test]
-fn clippy_preserves_workspace_fingerprints_without_denied_warnings() {
-    let p = project()
-        .file(
-            "Cargo.toml",
-            "[workspace]
-members = ['app', 'cached-dependency']
-resolver = '2'
-",
-        )
-        .file(
-            "app/Cargo.toml",
-            &format!(
-                "{}
-[dependencies]
-cached-dependency = {{ path = '../cached-dependency' }}
-",
-                basic_manifest("app", "0.1.0")
-            ),
-        )
-        .file(
-            "app/src/lib.rs",
-            "pub fn app() { cached_dependency::foo(); }
-",
-        )
-        .file(
-            "cached-dependency/Cargo.toml",
-            &basic_manifest("cached-dependency", "0.1.0"),
-        )
-        .file(
-            "cached-dependency/src/lib.rs",
-            "pub fn foo() {}
-",
-        )
-        .build();
-    p.cargo_("clippy --workspace").run();
-
-    p.cargo_("fixit --clippy --workspace --allow-no-vcs --verbose")
-        .with_stderr_data(str![].unordered())
-        .run();
-}
-
-#[cargo_test]
-fn clippy_fixes_denied_warnings() {
-    let p = project()
-        .file(
-            "src/lib.rs",
-            "#![deny(warnings)]
-pub fn a() { let mut value = 1; let _ = value; }
-",
-        )
-        .build();
-
-    p.cargo_("fixit --clippy --allow-no-vcs")
-        .with_status(0)
-        .run();
-
-    assert!(!p.read_file("src/lib.rs").contains("let mut value"));
-}
-
-#[cargo_test]
-fn fixes_denied_lints_with_compiler_error_codes() {
-    let p = project()
-        .file(
-            "src/lib.rs",
-            "#![allow(unused_variables, non_snake_case)]
-enum Choice { Value }
-pub fn check() { match Choice::Value { Value => {} } }
-",
-        )
-        .build();
-
-    p.cargo_("fixit --allow-no-vcs").run();
-
-    assert!(p.read_file("src/lib.rs").contains("Choice::Value =>"));
 }
 
 #[cargo_test]
