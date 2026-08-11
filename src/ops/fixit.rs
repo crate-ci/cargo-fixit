@@ -203,10 +203,8 @@ fn fix(
             anyhow::bail!("could not compile");
         }
 
-        let (mut errors, mut build_unit_map) = collect_errors(messages.into_iter(), &seen);
-        if build_unit_map.values().any(|file_map| !file_map.is_empty()) {
-            retain_primary_fixes(&primary_packages, &mut errors, &mut build_unit_map);
-        }
+        let (mut errors, mut build_unit_map) =
+            collect_errors(messages.into_iter(), &seen, &primary_packages);
 
         if iteration >= max_iterations {
             if active_targets.is_empty() {
@@ -497,28 +495,6 @@ fn package_metadata(flags: &CheckFlags) -> CargoResult<Metadata> {
     Ok(metadata)
 }
 
-/// Discards dependency suggestions while preserving their diagnostics for display.
-fn retain_primary_fixes(
-    primary_packages: &PrimaryPackages,
-    errors: &mut BuildUnitErrors,
-    build_unit_map: &mut BuildUnitSuggestions,
-) {
-    for (build_unit, file_map) in build_unit_map {
-        if file_map.is_empty() || primary_packages.contains(&build_unit.package_id) {
-            continue;
-        }
-
-        let build_unit_errors = errors.entry(build_unit.clone()).or_default();
-        build_unit_errors.extend(
-            file_map
-                .values()
-                .flatten()
-                .filter_map(|(_, diagnostic)| diagnostic.clone()),
-        );
-        file_map.clear();
-    }
-}
-
 /// Package dependencies used to batch only transitively unrelated packages.
 #[derive(Debug)]
 struct PackageGraph {
@@ -779,6 +755,7 @@ fn to_check_output(output: std::process::Output) -> (Vec<CheckOutput>, Option<i3
 fn collect_errors(
     messages: impl Iterator<Item = CheckOutput>,
     seen: &HashSet<BuildUnit>,
+    primary_packages: &PrimaryPackages,
 ) -> (BuildUnitErrors, BuildUnitSuggestions) {
     let only = HashSet::new();
     let mut build_unit_map = IndexMap::new();
@@ -807,6 +784,17 @@ fn collect_errors(
 
         if seen.contains(&build_unit) {
             trace!("rejecting build unit `{:?}` already seen", build_unit);
+            continue;
+        }
+
+        if !primary_packages.contains(&build_unit.package_id) {
+            trace!(
+                "rejecting build unit `{:?}` not selected by the user",
+                build_unit
+            );
+            if let Some(rendered) = diagnostic.rendered {
+                errors.insert(rendered);
+            }
             continue;
         }
 
