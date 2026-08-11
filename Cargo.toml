@@ -143,6 +143,7 @@ git2 = "0.20.4"
 glob = "0.3.3"
 cargo-util-schemas = "0.14.0"
 colorchoice-clap = "1.0.8"
+camino = "1.2.5"
 
 [dev-dependencies]
 automod = "1.0.17"

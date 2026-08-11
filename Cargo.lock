@@ -192,6 +192,7 @@ dependencies = [
  "anstream",
  "anyhow",
  "automod",
+ "camino",
  "cargo-test-support",
  "cargo-util",
  "cargo-util-schemas",

@@ -205,10 +205,10 @@ fn select_path_dep() {
     p.cargo_("fix --allow-no-vcs -p foo -p bar")
         .with_stdout_data("")
         .with_stderr_data(str![[r#"
-[CHECKING] foo v0.1.0
-[FIXED] src/lib.rs (1 fix)
 [CHECKING] bar v0.1.0
 [FIXED] bar/src/lib.rs (1 fix)
+[CHECKING] foo v0.1.0
+[FIXED] src/lib.rs (1 fix)
 
 "#]])
         .run();
@@ -256,7 +256,6 @@ fn select_implicit_ignores_path_dep() {
     p.cargo_("fix --allow-no-vcs")
         .cwd("foo")
         .with_stderr_data(str![[r#"
-[CHECKING] bar v0.1.0
 [WARNING] variable does not need to be mutable
  --> [ROOT]/foo/bar/src/lib.rs:3:25
   |
@@ -267,6 +266,7 @@ fn select_implicit_ignores_path_dep() {
   |
   = [NOTE] `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
 
+[CHECKING] bar v0.1.0
 [CHECKING] foo v0.1.0
 [FIXED] src/lib.rs (1 fix)
 
@@ -287,9 +287,6 @@ resolver = '2'
     p.cargo_("fix --allow-no-vcs")
         .with_stderr_data(str![[r#"
 [CHECKING] a v0.1.0
-[FIXED] a/src/main.rs (1 fix)
-[FIXED] a/build.rs (1 fix)
-[FIXED] a/src/lib.rs (1 fix)
 [CHECKING] b v0.1.0
 [WARNING] variable does not need to be mutable
  --> b/build.rs:1:16
@@ -311,6 +308,9 @@ resolver = '2'
   |
   = [NOTE] `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
 
+[FIXED] a/build.rs (1 fix)
+[FIXED] a/src/lib.rs (1 fix)
+[FIXED] a/src/main.rs (1 fix)
 
 "#]])
         .run();
@@ -328,9 +328,6 @@ resolver = '2'
     p.cargo_("fix --package a --allow-no-vcs")
         .with_stderr_data(str![[r#"
 [CHECKING] a v0.1.0
-[FIXED] a/src/main.rs (1 fix)
-[FIXED] a/build.rs (1 fix)
-[FIXED] a/src/lib.rs (1 fix)
 [CHECKING] b v0.1.0
 [WARNING] variable does not need to be mutable
  --> b/build.rs:1:16
@@ -352,6 +349,9 @@ resolver = '2'
   |
   = [NOTE] `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
 
+[FIXED] a/build.rs (1 fix)
+[FIXED] a/src/lib.rs (1 fix)
+[FIXED] a/src/main.rs (1 fix)
 
 "#]])
         .run();
@@ -369,9 +369,6 @@ resolver = '2'
     p.cargo_("fix --workspace --exclude b* --exclude c* --allow-no-vcs")
         .with_stderr_data(str![[r#"
 [CHECKING] a v0.1.0
-[FIXED] a/src/main.rs (1 fix)
-[FIXED] a/build.rs (1 fix)
-[FIXED] a/src/lib.rs (1 fix)
 [CHECKING] b v0.1.0
 [WARNING] variable does not need to be mutable
  --> b/build.rs:1:16
@@ -393,6 +390,9 @@ resolver = '2'
   |
   = [NOTE] `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
 
+[FIXED] a/build.rs (1 fix)
+[FIXED] a/src/lib.rs (1 fix)
+[FIXED] a/src/main.rs (1 fix)
 
 "#]])
         .run();
@@ -410,14 +410,14 @@ resolver = '2'
     p.cargo_("fix --workspace --lib --allow-no-vcs")
         .with_stderr_data(str![[r#"
 [CHECKING] a v0.1.0
-[FIXED] a/build.rs (1 fix)
-[CHECKING] c v0.1.0
-[FIXED] c/build.rs (1 fix)
-[FIXED] a/src/lib.rs (1 fix)
-[FIXED] c/src/lib.rs (1 fix)
 [CHECKING] b v0.1.0
+[CHECKING] c v0.1.0
+[FIXED] a/build.rs (1 fix)
 [FIXED] b/build.rs (1 fix)
+[FIXED] c/build.rs (1 fix)
 [FIXED] b/src/lib.rs (1 fix)
+[FIXED] c/src/lib.rs (1 fix)
+[FIXED] a/src/lib.rs (1 fix)
 
 "#]])
         .run();
@@ -435,17 +435,17 @@ resolver = '2'
     p.cargo_("fix --workspace --bins --allow-no-vcs")
         .with_stderr_data(str![[r#"
 [CHECKING] a v0.1.0
-[FIXED] a/src/main.rs (1 fix)
-[CHECKING] c v0.1.0
-[FIXED] c/src/main.rs (1 fix)
-[FIXED] a/build.rs (1 fix)
-[FIXED] c/build.rs (1 fix)
-[FIXED] a/src/lib.rs (1 fix)
-[FIXED] c/src/lib.rs (1 fix)
 [CHECKING] b v0.1.0
-[FIXED] b/src/main.rs (1 fix)
+[CHECKING] c v0.1.0
+[FIXED] a/build.rs (1 fix)
 [FIXED] b/build.rs (1 fix)
+[FIXED] c/build.rs (1 fix)
 [FIXED] b/src/lib.rs (1 fix)
+[FIXED] c/src/lib.rs (1 fix)
+[FIXED] a/src/lib.rs (1 fix)
+[FIXED] b/src/main.rs (1 fix)
+[FIXED] c/src/main.rs (1 fix)
+[FIXED] a/src/main.rs (1 fix)
 
 "#]])
         .run();
@@ -463,12 +463,12 @@ resolver = '2'
     p.cargo_("fix --workspace --bin a --allow-no-vcs")
         .with_stderr_data(str![[r#"
 [CHECKING] a v0.1.0
-[FIXED] a/src/main.rs (1 fix)
-[FIXED] a/build.rs (1 fix)
-[FIXED] a/src/lib.rs (1 fix)
 [CHECKING] b v0.1.0
+[FIXED] a/build.rs (1 fix)
 [FIXED] b/build.rs (1 fix)
 [FIXED] b/src/lib.rs (1 fix)
+[FIXED] a/src/lib.rs (1 fix)
+[FIXED] a/src/main.rs (1 fix)
 
 "#]])
         .run();
@@ -486,8 +486,6 @@ resolver = '2'
     p.cargo_("fix -p a --lib --allow-no-vcs")
         .with_stderr_data(str![[r#"
 [CHECKING] a v0.1.0
-[FIXED] a/build.rs (1 fix)
-[FIXED] a/src/lib.rs (1 fix)
 [CHECKING] b v0.1.0
 [WARNING] variable does not need to be mutable
  --> b/build.rs:1:16
@@ -509,6 +507,8 @@ resolver = '2'
   |
   = [NOTE] `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
 
+[FIXED] a/build.rs (1 fix)
+[FIXED] a/src/lib.rs (1 fix)
 
 "#]])
         .run();
@@ -526,9 +526,6 @@ resolver = '2'
     p.cargo_("fix -p a --bins --allow-no-vcs")
         .with_stderr_data(str![[r#"
 [CHECKING] a v0.1.0
-[FIXED] a/src/main.rs (1 fix)
-[FIXED] a/build.rs (1 fix)
-[FIXED] a/src/lib.rs (1 fix)
 [CHECKING] b v0.1.0
 [WARNING] variable does not need to be mutable
  --> b/build.rs:1:16
@@ -550,6 +547,9 @@ resolver = '2'
   |
   = [NOTE] `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
 
+[FIXED] a/build.rs (1 fix)
+[FIXED] a/src/lib.rs (1 fix)
+[FIXED] a/src/main.rs (1 fix)
 
 "#]])
         .run();
@@ -595,9 +595,9 @@ resolver = '2'
     p.cargo_("fix -p a --allow-no-vcs")
         .with_stderr_data(str![[r#"
 [CHECKING] a v0.1.0
-[FIXED] a/src/main.rs (1 fix)
 [FIXED] a/build.rs (1 fix)
 [FIXED] a/src/lib.rs (1 fix)
+[FIXED] a/src/main.rs (1 fix)
 
 "#]])
         .run();
@@ -896,6 +896,7 @@ fn upgrade_extern_crate() {
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(str![[r#"
+[CHECKING] bar v0.1.0
 [CHECKING] foo v0.1.0
 [FIXED] src/lib.rs (1 fix)
 
@@ -1879,8 +1880,8 @@ fn doesnt_rebuild_dependencies() {
         .with_stderr_data(str![[r#"
      Checked foo v0.1.0 - foo (lib)
      Checked bar v0.1.0 - bar (lib)
-[CHECKING] foo v0.1.0
 [CHECKING] bar v0.1.0
+[CHECKING] foo v0.1.0
 
 "#]])
         .run();
@@ -1889,6 +1890,8 @@ fn doesnt_rebuild_dependencies() {
         .env("__CARGO_FIX_YOLO", "1")
         .with_stdout_data("")
         .with_stderr_data(str![[r#"
+[CHECKING] bar v0.1.0
+[CHECKING] foo v0.1.0
 
 "#]])
         .run();
@@ -2343,6 +2346,7 @@ fn fix_shared_cross_workspace() {
         .with_stderr_data(
             str![[r#"
 [CHECKING] [..] v0.1.0
+[CHECKING] [..] v0.1.0
 [FIXED] [..]foo/src/shared.rs (2 fixes)
 
 "#]]
@@ -2427,6 +2431,8 @@ fn abnormal_exit() {
         )
         // "signal: 6, SIGABRT: process abort signal" on some platforms
         .with_stderr_data(str![[r#"
+[CHECKING] pm v0.1.0
+[CHECKING] foo v0.1.0
 [NOTE] reverting `src/lib.rs` to its original state
 [WARNING] failed to automatically apply fixes suggested by rustc
 
@@ -2729,6 +2735,7 @@ fn fix_in_dependency() {
     p.cargo_("fix --lib --allow-no-vcs")
         .env("RUSTC", &rustc_bin)
         .with_stderr_data(str![[r#"
+[CHECKING] bar v1.0.0
 [CHECKING] foo v0.1.0
 [WARNING] unused variable: `abc`
  --> [ROOT]/home/.cargo/registry/src/-[HASH]/bar-1.0.0/src/lib.rs:5:29
@@ -2738,7 +2745,6 @@ fn fix_in_dependency() {
   |
   = [NOTE] `#[warn(unused_variables)]` on by default
 
-[CHECKING] bar v1.0.0
 
 "#]])
         .run();

@@ -122,7 +122,10 @@ fn reuse_checks_cache() {
     p.cargo_("check").run();
 
     p.cargo_("fixit --allow-no-vcs --verbose")
-        .with_stderr_data(str![])
+        .with_stderr_data(str![[r#"
+[CHECKING] foo v0.1.0
+
+"#]])
         .run();
 }
 
@@ -208,20 +211,20 @@ fn print_errors_after_fixed() {
     p.cargo_("fixit --allow-no-vcs")
         .with_status(0)
         .with_stderr_data(str![[r#"
-[CHECKING] a v0.1.0
-[FIXED] a/src/lib.rs (1 fix)
+[CHECKING] b v0.1.0
+[FIXED] b/src/lib.rs (1 fix)
 [WARNING] function `bar` is never used
- --> a/src/lib.rs:1:5
+ --> b/src/lib.rs:1:5
   |
 1 |  fn bar() {}
   |     ^^^
   |
   = [NOTE] `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
 
-[CHECKING] b v0.1.0
-[FIXED] b/src/lib.rs (1 fix)
+[CHECKING] a v0.1.0
+[FIXED] a/src/lib.rs (1 fix)
 [WARNING] function `bar` is never used
- --> b/src/lib.rs:1:5
+ --> a/src/lib.rs:1:5
   |
 1 |  fn bar() {}
   |     ^^^
@@ -308,6 +311,7 @@ pub fn lib() { let mut value = 1; let _ = value; }
     p.cargo_("fixit --allow-no-vcs")
         .with_status(101)
         .with_stderr_data(str![[r#"
+[CHECKING] foo v0.1.0
 [ERROR] failed to write `src/lib.rs`: Permission denied (os error 13)
 
 "#]])
@@ -347,6 +351,8 @@ resolver = "2"
     p.cargo_("fixit --workspace --allow-no-vcs")
         .with_status(101)
         .with_stderr_data(str![[r#"
+[CHECKING] a v0.1.0
+[CHECKING] b v0.1.0
 [ERROR] failed to write `b/src/lib.rs`: Permission denied (os error 13)
 
 "#]])
@@ -381,10 +387,7 @@ path = \"src/main.rs\"
      Checked foo v0.1.0 - app (bin)
      Checked foo v0.1.0 - build-script-build (custom-build)
      Checked foo v0.1.0 - foo (lib)
-     Checked foo v0.1.0 - app (bin)
-     Checked foo v0.1.0 - foo (lib)
 [CHECKING] foo v0.1.0
-[FIXED] src/main.rs (1 fix)
      Checked foo v0.1.0 - app (bin)
      Checked foo v0.1.0 - build-script-build (custom-build)
      Checked foo v0.1.0 - foo (lib)
@@ -392,6 +395,9 @@ path = \"src/main.rs\"
      Checked foo v0.1.0 - app (bin)
      Checked foo v0.1.0 - foo (lib)
 [FIXED] src/lib.rs (1 fix)
+     Checked foo v0.1.0 - app (bin)
+     Checked foo v0.1.0 - foo (lib)
+[FIXED] src/main.rs (1 fix)
 
 "#]])
         .run();
@@ -419,8 +425,8 @@ crate-type = ["rlib", "cdylib"]
     p.cargo_("fixit --allow-no-vcs --verbose")
         .with_stderr_data(str![[r#"
      Checked foo v0.1.0 - foo (lib)
-     Checked foo v0.1.0 - foo (lib)
 [CHECKING] foo v0.1.0
+     Checked foo v0.1.0 - foo (lib)
 [FIXED] src/lib.rs (1 fix)
 
 "#]])
@@ -468,18 +474,18 @@ dep = {{ path = '../dep' }}
      Checked app v0.1.0 - build-script-build (custom-build)
      Checked dep v0.1.0 - dep (lib)
      Checked dep v0.1.0 - dep (lib)
+[CHECKING] dep v0.1.0
      Checked app v0.1.0 - app (bin)
+     Checked app v0.1.0 - build-script-build (custom-build)
+     Checked dep v0.1.0 - dep (lib)
+     Checked dep v0.1.0 - dep (lib)
+[FIXED] dep/src/lib.rs (1 fix)
 [CHECKING] app v0.1.0
-[FIXED] app/src/main.rs (1 fix)
      Checked app v0.1.0 - app (bin)
      Checked app v0.1.0 - build-script-build (custom-build)
 [FIXED] app/build.rs (1 fix)
      Checked app v0.1.0 - app (bin)
-     Checked app v0.1.0 - build-script-build (custom-build)
-     Checked dep v0.1.0 - dep (lib)
-     Checked dep v0.1.0 - dep (lib)
-[CHECKING] dep v0.1.0
-[FIXED] dep/src/lib.rs (1 fix)
+[FIXED] app/src/main.rs (1 fix)
 
 "#]])
         .run();
@@ -571,18 +577,7 @@ fn main(){ let mut a = 1; let _ = a; }
      Checked foo v0.1.0 - examp_b (example)
      Checked foo v0.1.0 - foo (lib)
      Checked foo v0.1.0 - foo (lib)
-     Checked foo v0.1.0 - app (bin)
-     Checked foo v0.1.0 - app (bin)
 [CHECKING] foo v0.1.0
-[FIXED] src/main.rs (2 fixes)
-     Checked foo v0.1.0 - test_a (test)
-[FIXED] tests/test_a.rs (2 fixes)
-     Checked foo v0.1.0 - test_b (test)
-[FIXED] tests/test_b.rs (2 fixes)
-     Checked foo v0.1.0 - examp_a (example)
-[FIXED] examples/examp_a.rs (1 fix)
-     Checked foo v0.1.0 - examp_b (example)
-[FIXED] examples/examp_b.rs (1 fix)
      Checked foo v0.1.0 - app (bin)
      Checked foo v0.1.0 - app (bin)
      Checked foo v0.1.0 - test_a (test)
@@ -592,6 +587,17 @@ fn main(){ let mut a = 1; let _ = a; }
      Checked foo v0.1.0 - foo (lib)
      Checked foo v0.1.0 - foo (lib)
 [FIXED] src/lib.rs (2 fixes)
+     Checked foo v0.1.0 - app (bin)
+     Checked foo v0.1.0 - app (bin)
+     Checked foo v0.1.0 - test_a (test)
+     Checked foo v0.1.0 - test_b (test)
+     Checked foo v0.1.0 - examp_a (example)
+     Checked foo v0.1.0 - examp_b (example)
+[FIXED] src/main.rs (2 fixes)
+[FIXED] tests/test_a.rs (2 fixes)
+[FIXED] tests/test_b.rs (2 fixes)
+[FIXED] examples/examp_a.rs (1 fix)
+[FIXED] examples/examp_b.rs (1 fix)
 
 "#]])
         .run();
@@ -626,11 +632,11 @@ resolver = "2"
         .with_stderr_data(str![[r#"
      Checked a v0.1.0 - a (lib)
      Checked b v0.1.0 - b (lib)
+[CHECKING] a v0.1.0
+[CHECKING] b v0.1.0
      Checked a v0.1.0 - a (lib)
      Checked b v0.1.0 - b (lib)
-[CHECKING] a v0.1.0
 [FIXED] a/src/lib.rs (1 fix)
-[CHECKING] b v0.1.0
 [FIXED] b/src/lib.rs (1 fix)
 
 "#]])
@@ -697,24 +703,24 @@ fn fix_order_serial_packages() {
      Checked b v0.1.0 - b (lib)
      Checked c v0.1.0 - c (lib)
      Checked d v0.1.0 - d (lib)
-     Checked a v0.1.0 - a (lib)
-[CHECKING] a v0.1.0
-[FIXED] a/src/lib.rs (1 fix)
-     Checked a v0.1.0 - a (lib)
-     Checked b v0.1.0 - b (lib)
-[CHECKING] b v0.1.0
-[FIXED] b/src/lib.rs (1 fix)
-     Checked a v0.1.0 - a (lib)
-     Checked b v0.1.0 - b (lib)
-     Checked c v0.1.0 - c (lib)
-[CHECKING] c v0.1.0
-[FIXED] c/src/lib.rs (1 fix)
+[CHECKING] d v0.1.0
      Checked a v0.1.0 - a (lib)
      Checked b v0.1.0 - b (lib)
      Checked c v0.1.0 - c (lib)
      Checked d v0.1.0 - d (lib)
-[CHECKING] d v0.1.0
 [FIXED] d/src/lib.rs (1 fix)
+[CHECKING] c v0.1.0
+     Checked a v0.1.0 - a (lib)
+     Checked b v0.1.0 - b (lib)
+     Checked c v0.1.0 - c (lib)
+[FIXED] c/src/lib.rs (1 fix)
+[CHECKING] b v0.1.0
+     Checked a v0.1.0 - a (lib)
+     Checked b v0.1.0 - b (lib)
+[FIXED] b/src/lib.rs (1 fix)
+[CHECKING] a v0.1.0
+     Checked a v0.1.0 - a (lib)
+[FIXED] a/src/lib.rs (1 fix)
 
 "#]])
         .run();
@@ -747,9 +753,10 @@ resolver = "2"
         .with_stderr_data(str![[r#"
      Checked a v0.1.0 - a (lib)
      Checked b v0.1.0 - b (lib)
+[CHECKING] a v0.1.0
+[CHECKING] b v0.1.0
      Checked a v0.1.0 - a (lib)
      Checked b v0.1.0 - b (lib)
-[CHECKING] a v0.1.0
 [FIXED] a/src/lib.rs (1 fix)
 
 "#]])
@@ -828,9 +835,7 @@ a = {{ path = '../a' }}
      Checked b v0.1.0 - b (lib)
      Checked c v0.1.0 - c (lib)
      Checked c v0.1.0 - c (lib)
-     Checked a v0.1.0 - cycle (test)
 [CHECKING] a v0.1.0
-[FIXED] a/tests/cycle.rs (1 fix)
      Checked a v0.1.0 - cycle (test)
      Checked a v0.1.0 - a (lib)
      Checked a v0.1.0 - a (lib)
@@ -839,20 +844,22 @@ a = {{ path = '../a' }}
      Checked c v0.1.0 - c (lib)
      Checked c v0.1.0 - c (lib)
 [FIXED] a/src/lib.rs (1 fix)
+[CHECKING] c v0.1.0
      Checked a v0.1.0 - cycle (test)
      Checked a v0.1.0 - a (lib)
      Checked b v0.1.0 - b (lib)
      Checked b v0.1.0 - b (lib)
+     Checked c v0.1.0 - c (lib)
+     Checked c v0.1.0 - c (lib)
+[FIXED] c/src/lib.rs (1 fix)
 [CHECKING] b v0.1.0
+     Checked a v0.1.0 - cycle (test)
+     Checked a v0.1.0 - a (lib)
+     Checked b v0.1.0 - b (lib)
+     Checked b v0.1.0 - b (lib)
 [FIXED] b/src/lib.rs (1 fix)
      Checked a v0.1.0 - cycle (test)
-     Checked a v0.1.0 - a (lib)
-     Checked b v0.1.0 - b (lib)
-     Checked b v0.1.0 - b (lib)
-     Checked c v0.1.0 - c (lib)
-     Checked c v0.1.0 - c (lib)
-[CHECKING] c v0.1.0
-[FIXED] c/src/lib.rs (1 fix)
+[FIXED] a/tests/cycle.rs (1 fix)
 
 "#]])
         .run();
@@ -896,13 +903,13 @@ shared = {{ path = '../shared' }}
      Checked app v0.1.0 - app (lib)
      Checked shared v0.1.0 - shared (lib)
      Checked shared v0.1.0 - shared (lib)
-[CHECKING] app v0.1.0
+[CHECKING] shared v0.1.0
      Checked app v0.1.0 - build-script-build (custom-build)
      Checked app v0.1.0 - app (lib)
      Checked shared v0.1.0 - shared (lib)
      Checked shared v0.1.0 - shared (lib)
-[CHECKING] shared v0.1.0
 [FIXED] shared/src/lib.rs (1 fix)
+[CHECKING] app v0.1.0
 
 "#]])
         .run();
