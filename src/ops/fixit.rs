@@ -87,11 +87,11 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
 
     args.vcs_opts.valid_vcs()?;
 
-    let mut active_targets = IndexMap::new();
-    match fix(&args, &mut active_targets) {
+    let mut active_units = IndexMap::new();
+    match fix(&args, &mut active_units) {
         Ok(()) => Ok(()),
         Err(error) => {
-            for (file, original) in active_targets.values().flat_map(|files| files.iter()) {
+            for (file, original) in active_units.values().flat_map(|files| files.iter()) {
                 paths::write(file, &original.original_source)?;
             }
             Err(error)
@@ -101,7 +101,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
 
 fn fix(
     args: &FixitArgs,
-    active_targets: &mut IndexMap<BuildUnit, IndexMap<String, File>>,
+    active_units: &mut IndexMap<BuildUnit, IndexMap<String, File>>,
 ) -> CargoResult<()> {
     let max_iterations: usize = env::var("CARGO_FIX_MAX_RETRIES")
         .ok()
@@ -120,7 +120,7 @@ fn fix(
 
     loop {
         trace!("iteration={iteration}");
-        trace!("active_targets={active_targets:?}");
+        trace!("active_units={active_units:?}");
         let (mut messages, exit_code) = check(args, &mut lint_cap)?;
         messages.sort_unstable_by_key(|m| m.build_unit().cloned());
         print_built(args, &messages)?;
@@ -132,7 +132,7 @@ fn fix(
         } else if !args.broken_code && exit_code != Some(0) {
             let mut out = String::new();
 
-            if !active_targets.is_empty() {
+            if !active_units.is_empty() {
                 out.push_str(
                     "failed to automatically apply fixes suggested by rustc\n\n\
                     after fixes were automatically applied the \
@@ -145,13 +145,13 @@ fn fix(
                         fixes: _,
                         original_source,
                     },
-                ) in active_targets.values().flat_map(|files| files.iter())
+                ) in active_units.values().flat_map(|files| files.iter())
                 {
                     out.push_str(&format!("  * {file}\n"));
                     shell::note(format!("reverting `{file}` to its original state"))?;
                     paths::write(file, original_source)?;
                 }
-                active_targets.clear();
+                active_units.clear();
                 out.push('\n');
 
                 out.push_str(&gen_please_report_this_bug_text(args.clippy));
@@ -207,10 +207,10 @@ fn fix(
             collect_errors(messages.into_iter(), &seen, &primary_packages);
 
         if iteration >= max_iterations {
-            if active_targets.is_empty() {
+            if active_units.is_empty() {
                 break;
             }
-            let targets: Vec<_> = active_targets.keys().cloned().collect();
+            let targets: Vec<_> = active_units.keys().cloned().collect();
             for target in targets {
                 if let Some(file_map) = build_unit_map.get(&target) {
                     let target_errors = errors.entry(target.clone()).or_default();
@@ -221,24 +221,24 @@ fn fix(
                             .filter_map(|(_, diagnostic)| diagnostic.clone()),
                     );
                 }
-                finish_target(target, active_targets, &mut errors, &mut seen)?;
+                finish_unit(target, active_units, &mut errors, &mut seen)?;
             }
             claimed_files.clear();
             iteration = 0;
         }
 
         let mut finalized_targets = false;
-        if !active_targets.is_empty()
-            && active_targets
+        if !active_units.is_empty()
+            && active_units
                 .keys()
                 .all(|target| build_unit_map.get(target).is_none_or(IndexMap::is_empty))
         {
-            let targets: Vec<_> = active_targets.keys().cloned().collect();
+            let targets: Vec<_> = active_units.keys().cloned().collect();
             for target in targets {
                 build_unit_map.shift_remove(&target);
-                finish_target(target, active_targets, &mut errors, &mut seen)?;
+                finish_unit(target, active_units, &mut errors, &mut seen)?;
             }
-            debug_assert!(active_targets.is_empty());
+            debug_assert!(active_units.is_empty());
             claimed_files.clear();
             iteration = 0;
             finalized_targets = true;
@@ -247,7 +247,7 @@ fn fix(
         let mut made_changes = false;
         // Admit build units from one compiler snapshot only when their packages are independent.
         // Once a batch is active, recheck and finish it before considering additional units.
-        let continuing_batch = !active_targets.is_empty();
+        let continuing_batch = !active_units.is_empty();
 
         for (build_unit, file_map) in build_unit_map {
             if seen.contains(&build_unit) {
@@ -258,7 +258,7 @@ fn fix(
                 .entry(build_unit.clone())
                 .or_insert_with(IndexSet::new);
 
-            if active_targets.is_empty() && file_map.is_empty() {
+            if active_units.is_empty() && file_map.is_empty() {
                 if finalized_targets && build_unit_errors.is_empty() {
                     continue;
                 }
@@ -272,13 +272,13 @@ fn fix(
 
                 seen.insert(build_unit);
             } else if !file_map.is_empty() {
-                let was_active = active_targets.contains_key(&build_unit);
+                let was_active = active_units.contains_key(&build_unit);
                 if continuing_batch && !was_active {
                     continue;
                 }
 
-                if !args.dangerous_parallel_fixes && !was_active && !active_targets.is_empty() {
-                    if active_targets
+                if !args.dangerous_parallel_fixes && !was_active && !active_units.is_empty() {
+                    if active_units
                         .keys()
                         .any(|active| active.package_id == build_unit.package_id)
                     {
@@ -294,7 +294,7 @@ fn fix(
                     };
 
                     let mut independent = true;
-                    for active in active_targets.keys() {
+                    for active in active_units.keys() {
                         if !graph
                             .packages_are_independent(&active.package_id, &build_unit.package_id)
                         {
@@ -313,7 +313,7 @@ fn fix(
                     .collect::<Result<Vec<_>, _>>()
                     .ok();
                 let serialize_target = handles.is_none();
-                if serialize_target && !was_active && !active_targets.is_empty() {
+                if serialize_target && !was_active && !active_units.is_empty() {
                     continue;
                 }
                 if handles.as_ref().is_some_and(|handles| {
@@ -326,10 +326,10 @@ fn fix(
                     continue;
                 }
 
-                let target_files = active_targets.entry(build_unit.clone()).or_default();
+                let target_files = active_units.entry(build_unit.clone()).or_default();
                 let changed = fix_errors(target_files, file_map, build_unit_errors)?;
                 if !changed && !was_active {
-                    active_targets.shift_remove(&build_unit);
+                    active_units.shift_remove(&build_unit);
                 }
                 if changed {
                     if let Some(handles) = handles {
@@ -346,18 +346,18 @@ fn fix(
         }
 
         trace!("made_changes={made_changes:?}");
-        trace!("active_targets={active_targets:?}");
+        trace!("active_units={active_units:?}");
 
         last_errors = errors;
         iteration += 1;
 
         if !made_changes {
-            if active_targets.is_empty() {
+            if active_units.is_empty() {
                 break;
             }
-            let targets: Vec<_> = active_targets.keys().cloned().collect();
+            let targets: Vec<_> = active_units.keys().cloned().collect();
             for target in targets {
-                finish_target(target, active_targets, &mut last_errors, &mut seen)?;
+                finish_unit(target, active_units, &mut last_errors, &mut seen)?;
             }
             claimed_files.clear();
             iteration = 0;
@@ -365,7 +365,7 @@ fn fix(
         }
     }
 
-    for files in active_targets.values() {
+    for files in active_units.values() {
         for (name, file) in files {
             shell::fixed(name, file.fixes)?;
         }
@@ -375,7 +375,7 @@ fn fix(
         shell::print_ansi_stderr(format!("{}\n\n", e.trim_end()).as_bytes())?;
     }
 
-    active_targets.clear();
+    active_units.clear();
     Ok(())
 }
 
@@ -629,32 +629,32 @@ impl PackageGraph {
 }
 
 /// Marks a target complete after reporting its fixes and remaining diagnostics.
-fn finish_target(
-    target: BuildUnit,
-    active_targets: &mut IndexMap<BuildUnit, IndexMap<String, File>>,
+fn finish_unit(
+    unit: BuildUnit,
+    active_units: &mut IndexMap<BuildUnit, IndexMap<String, File>>,
     errors: &mut BuildUnitErrors,
     seen: &mut HashSet<BuildUnit>,
 ) -> CargoResult<()> {
     if seen
         .iter()
-        .all(|build_unit| build_unit.package_id != target.package_id)
+        .all(|build_unit| build_unit.package_id != unit.package_id)
     {
-        shell::status("Checking", format_package_id(&target.package_id)?)?;
+        shell::status("Checking", format_package_id(&unit.package_id)?)?;
     }
 
-    if let Some(files) = active_targets.get(&target) {
+    if let Some(files) = active_units.get(&unit) {
         for (name, file) in files {
             shell::fixed(name, file.fixes)?;
         }
     }
 
-    for error in errors.get(&target).into_iter().flatten() {
+    for error in errors.get(&unit).into_iter().flatten() {
         shell::print_ansi_stderr(format!("{}\n\n", error.trim_end()).as_bytes())?;
     }
 
-    active_targets.shift_remove(&target);
-    errors.shift_remove(&target);
-    seen.insert(target);
+    active_units.shift_remove(&unit);
+    errors.shift_remove(&unit);
+    seen.insert(unit);
     Ok(())
 }
 
