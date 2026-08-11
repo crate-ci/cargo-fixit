@@ -353,11 +353,21 @@ path = \"src/main.rs\"
         .file("src/main.rs", "fn main(){ let mut a = 1; let _ = a; }")
         .build();
 
-    p.cargo_("fixit --allow-no-vcs")
+    p.cargo_("fixit --allow-no-vcs --verbose")
         .with_stderr_data(str![[r#"
+     Checked foo v0.1.0 - build-script-build (custom-build)
+     Checked foo v0.1.0 - foo (lib)
+     Checked foo v0.1.0 - app (bin)
+     Checked foo v0.1.0 - build-script-build (custom-build)
+     Checked foo v0.1.0 - foo (lib)
+     Checked foo v0.1.0 - app (bin)
 [CHECKING] foo v0.1.0
 [FIXED] build.rs (1 fix)
+     Checked foo v0.1.0 - foo (lib)
+     Checked foo v0.1.0 - app (bin)
 [FIXED] src/lib.rs (1 fix)
+     Checked foo v0.1.0 - foo (lib)
+     Checked foo v0.1.0 - app (bin)
 [FIXED] src/main.rs (1 fix)
 
 "#]])
@@ -523,8 +533,8 @@ resolver = "2"
      Checked a v0.1.0 - a (lib)
      Checked b v0.1.0 - b (lib)
      Checked a v0.1.0 - a (lib)
-[CHECKING] b v0.1.0
-[FIXED] b/src/lib.rs (1 fix)
+[CHECKING] a v0.1.0
+[FIXED] a/src/lib.rs (1 fix)
 
 "#]]
             .unordered(),
