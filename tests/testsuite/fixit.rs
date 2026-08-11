@@ -374,6 +374,124 @@ path = \"src/main.rs\"
 }
 
 #[cargo_test]
+fn fix_order_host_target_dependency() {
+    let p = project()
+        .file(
+            "Cargo.toml",
+            r#"[workspace]
+members = ["app", "dep"]
+resolver = "2"
+"#,
+        )
+        .file(
+            "app/Cargo.toml",
+            &format!(
+                "{}
+[build-dependencies]
+dep = {{ path = '../dep' }}
+
+[dependencies]
+dep = {{ path = '../dep' }}
+",
+                basic_manifest("app", "0.1.0")
+            ),
+        )
+        .file(
+            "app/build.rs",
+            "fn main() { let mut value = dep::dep(); let _ = value; }\n",
+        )
+        .file("app/src/main.rs", "fn main(){ let mut a = 1; let _ = a; }")
+        .file("dep/Cargo.toml", &basic_manifest("dep", "0.1.0"))
+        .file(
+            "dep/src/lib.rs",
+            "pub fn dep() -> usize { let mut value = 1; value }\n",
+        )
+        .build();
+
+    p.cargo_("fixit --workspace --allow-no-vcs --target host-tuple --verbose")
+        .with_stderr_data(str![[r#"
+     Checked app v0.1.0 - app (bin)
+     Checked app v0.1.0 - build-script-build (custom-build)
+     Checked dep v0.1.0 - dep (lib)
+     Checked dep v0.1.0 - dep (lib)
+     Checked app v0.1.0 - app (bin)
+[CHECKING] app v0.1.0
+[FIXED] app/src/main.rs (1 fix)
+     Checked app v0.1.0 - app (bin)
+     Checked app v0.1.0 - build-script-build (custom-build)
+[FIXED] app/build.rs (1 fix)
+     Checked app v0.1.0 - app (bin)
+     Checked app v0.1.0 - build-script-build (custom-build)
+     Checked dep v0.1.0 - dep (lib)
+     Checked dep v0.1.0 - dep (lib)
+[CHECKING] dep v0.1.0
+[FIXED] dep/src/lib.rs (1 fix)
+
+"#]])
+        .run();
+}
+
+#[cargo_test]
+fn fix_order_unit_test() {
+    let p = project()
+        .file(
+            "Cargo.toml",
+            &format!(
+                "{}
+[[bin]]
+name = \"app\"
+path = \"src/main.rs\"
+",
+                basic_manifest("foo", "0.1.0")
+            ),
+        )
+        .file(
+            "src/lib.rs",
+            "
+fn _a(){ let mut a = 1; let _ = a; }
+
+#[test]
+fn foo() {
+    let mut a = 1;
+    let _ = a;
+}
+",
+        )
+        .file(
+            "src/main.rs",
+            "
+fn main(){ let mut a = 1; let _ = a; }
+
+#[test]
+fn foo() {
+    let mut a = 1;
+    let _ = a;
+}
+",
+        )
+        .build();
+
+    p.cargo_("fixit --allow-no-vcs --all-targets --verbose")
+        .with_stderr_data(str![[r#"
+     Checked foo v0.1.0 - app (bin)
+     Checked foo v0.1.0 - app (bin)
+     Checked foo v0.1.0 - foo (lib)
+     Checked foo v0.1.0 - foo (lib)
+     Checked foo v0.1.0 - app (bin)
+     Checked foo v0.1.0 - app (bin)
+[CHECKING] foo v0.1.0
+[FIXED] src/main.rs (2 fixes)
+     Checked foo v0.1.0 - app (bin)
+     Checked foo v0.1.0 - app (bin)
+     Checked foo v0.1.0 - foo (lib)
+     Checked foo v0.1.0 - foo (lib)
+[FIXED] src/lib.rs (2 fixes)
+
+"#]])
+        .run();
+}
+
+#[cargo_test]
 fn fix_order_independent_packages() {
     let p = project()
         .file(
