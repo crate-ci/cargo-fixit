@@ -112,11 +112,11 @@ fn fix(
 
     let mut last_errors = IndexMap::new();
     let mut claimed_files: HashMap<same_file::Handle, BuildUnit> = HashMap::new();
-    let mut primary_packages_cache = None;
     let mut package_graph_cache: Option<Option<PackageGraph>> = None;
     let mut seen = HashSet::new();
 
     let package_metadata = package_metadata(&args.check_flags)?;
+    let primary_packages = PrimaryPackages::from_metadata(&package_metadata, &args.check_flags)?;
 
     loop {
         trace!("iteration={iteration}");
@@ -205,15 +205,7 @@ fn fix(
 
         let (mut errors, mut build_unit_map) = collect_errors(messages.into_iter(), &seen);
         if build_unit_map.values().any(|file_map| !file_map.is_empty()) {
-            let primary_packages = if let Some(primary_packages) = &primary_packages_cache {
-                primary_packages
-            } else {
-                primary_packages_cache.insert(PrimaryPackages::from_metadata(
-                    &package_metadata,
-                    &args.check_flags,
-                )?)
-            };
-            retain_primary_fixes(primary_packages, &mut errors, &mut build_unit_map);
+            retain_primary_fixes(&primary_packages, &mut errors, &mut build_unit_map);
         }
 
         if iteration >= max_iterations {
