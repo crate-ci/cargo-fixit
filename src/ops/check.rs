@@ -1,14 +1,23 @@
 use rustfix::diagnostics::Diagnostic;
 use serde::Deserialize;
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Clone, Debug, Hash, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum CheckOutput {
     Artifact(Artifact),
     Message(Message),
 }
 
-#[derive(Deserialize, Debug)]
+impl CheckOutput {
+    pub fn build_unit(&self) -> Option<&BuildUnit> {
+        match self {
+            Self::Artifact(a) => Some(&a.build_unit),
+            Self::Message(m) => Some(&m.build_unit),
+        }
+    }
+}
+
+#[derive(Deserialize, Clone, Debug, Hash, PartialEq, Eq)]
 #[allow(dead_code)]
 pub struct Artifact {
     #[serde(flatten)]
@@ -16,14 +25,14 @@ pub struct Artifact {
     pub fresh: bool,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Clone, Debug, Hash, PartialEq, Eq)]
 pub struct Message {
     #[serde(flatten)]
     pub build_unit: BuildUnit,
     pub message: MessageDiagnostic,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Clone, Debug, Hash, PartialEq, Eq)]
 pub struct MessageDiagnostic {
     #[serde(flatten)]
     pub level: DiagnosticLevel,
@@ -31,7 +40,7 @@ pub struct MessageDiagnostic {
     pub diagnostic: Diagnostic,
 }
 
-#[derive(Deserialize, Debug, PartialEq, Eq)]
+#[derive(Deserialize, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(tag = "level", rename_all = "lowercase")]
 pub enum DiagnosticLevel {
     Error,
@@ -39,13 +48,13 @@ pub enum DiagnosticLevel {
     Other,
 }
 
-#[derive(Deserialize, Hash, PartialEq, Clone, Eq, Debug)]
+#[derive(Deserialize, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct BuildUnit {
     pub package_id: String,
     pub target: Target,
 }
 
-#[derive(Deserialize, Hash, PartialEq, Clone, Eq, Debug)]
+#[derive(Deserialize, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Target {
     pub kind: Vec<TargetKind>,
     pub crate_types: Vec<CrateType>,
@@ -57,7 +66,7 @@ pub struct Target {
     pub test: bool,
 }
 
-#[derive(Deserialize, Hash, PartialEq, Clone, Eq, Debug)]
+#[derive(Deserialize, Hash, PartialEq, Clone, Eq, Debug, PartialOrd, Ord)]
 #[serde(rename_all(deserialize = "kebab-case"))]
 pub enum TargetKind {
     Bin,
@@ -69,7 +78,7 @@ pub enum TargetKind {
     Lib(CrateType),
 }
 
-#[derive(Deserialize, Hash, PartialEq, Clone, Eq, Debug)]
+#[derive(Deserialize, Hash, PartialEq, Clone, Eq, Debug, PartialOrd, Ord)]
 #[serde(rename_all(deserialize = "kebab-case"))]
 pub enum CrateType {
     Bin,

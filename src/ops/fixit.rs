@@ -120,7 +120,8 @@ fn fix(
     loop {
         trace!("iteration={iteration}");
         trace!("active_targets={active_targets:?}");
-        let (messages, exit_code) = check(args, &mut lint_cap)?;
+        let (mut messages, exit_code) = check(args, &mut lint_cap)?;
+        messages.sort_unstable_by_key(|m| m.build_unit().cloned());
         print_built(args, &messages)?;
 
         if messages.is_empty() && exit_code != Some(0) {

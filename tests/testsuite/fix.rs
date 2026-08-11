@@ -572,7 +572,6 @@ fn upgrade_extern_crate() {
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(str![[r#"
-[CHECKING] bar v0.1.0
 [CHECKING] foo v0.1.0
 [FIXED] src/lib.rs (1 fix)
 
@@ -1554,8 +1553,8 @@ fn doesnt_rebuild_dependencies() {
         .env("__CARGO_FIX_YOLO", "1")
         .with_stdout_data("")
         .with_stderr_data(str![[r#"
-[CHECKING] bar v0.1.0
 [CHECKING] foo v0.1.0
+[CHECKING] bar v0.1.0
 
 "#]])
         .run();
@@ -2102,7 +2101,6 @@ fn abnormal_exit() {
         )
         // "signal: 6, SIGABRT: process abort signal" on some platforms
         .with_stderr_data(str![[r#"
-[CHECKING] pm v0.1.0
 [NOTE] reverting `src/lib.rs` to its original state
 [WARNING] failed to automatically apply fixes suggested by rustc
 
@@ -2120,6 +2118,7 @@ Note that you may be able to make some more progress in the near-term
 fixing code with the `--broken-code` flag
 
 The original errors are:
+[WARNING] variable does not need to be mutable
 ...
 
 "#]])
@@ -2404,7 +2403,6 @@ fn fix_in_dependency() {
     p.cargo_("fix --lib --allow-no-vcs")
         .env("RUSTC", &rustc_bin)
         .with_stderr_data(str![[r#"
-[CHECKING] bar v1.0.0
 [CHECKING] foo v0.1.0
 [WARNING] unused variable: `abc`
  --> [ROOT]/home/.cargo/registry/src/-[HASH]/bar-1.0.0/src/lib.rs:5:29
@@ -2414,6 +2412,7 @@ fn fix_in_dependency() {
   |
   = [NOTE] `#[warn(unused_variables)]` on by default
 
+[CHECKING] bar v1.0.0
 
 "#]])
         .run();

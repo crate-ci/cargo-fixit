@@ -4,7 +4,6 @@ use cargo_test_support::compare::assert_ui;
 use cargo_test_support::project;
 use cargo_test_support::Project;
 use snapbox::str;
-use snapbox::IntoData as _;
 
 use crate::fix::FixitProject;
 
@@ -123,7 +122,7 @@ fn reuse_checks_cache() {
     p.cargo_("check").run();
 
     p.cargo_("fixit --allow-no-vcs --verbose")
-        .with_stderr_data(str![].unordered())
+        .with_stderr_data(str![])
         .run();
 }
 
@@ -209,16 +208,6 @@ fn print_errors_after_fixed() {
     p.cargo_("fixit --allow-no-vcs")
         .with_status(0)
         .with_stderr_data(str![[r#"
-[CHECKING] b v0.1.0
-[FIXED] b/src/lib.rs (1 fix)
-[WARNING] function `bar` is never used
- --> b/src/lib.rs:1:5
-  |
-1 |  fn bar() {}
-  |     ^^^
-  |
-  = [NOTE] `#[warn(dead_code)]` [..]on by default
-
 [CHECKING] a v0.1.0
 [FIXED] a/src/lib.rs (1 fix)
 [WARNING] function `bar` is never used
@@ -227,7 +216,17 @@ fn print_errors_after_fixed() {
 1 |  fn bar() {}
   |     ^^^
   |
-  = [NOTE] `#[warn(dead_code)]` [..]on by default
+  = [NOTE] `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+[CHECKING] b v0.1.0
+[FIXED] b/src/lib.rs (1 fix)
+[WARNING] function `bar` is never used
+ --> b/src/lib.rs:1:5
+  |
+1 |  fn bar() {}
+  |     ^^^
+  |
+  = [NOTE] `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
 
 
 "#]])
@@ -285,7 +284,7 @@ pub fn lib() { let mut value = 1; let _ = value; }
     p.cargo_("fixit --allow-no-vcs")
         .with_status(101)
         .with_stderr_data(str![[r#"
-[ERROR] failed to write `src/lib.rs`: [..]
+[ERROR] failed to write `src/lib.rs`: Permission denied (os error 13)
 
 "#]])
         .run();
@@ -324,7 +323,7 @@ resolver = "2"
     p.cargo_("fixit --workspace --allow-no-vcs")
         .with_status(101)
         .with_stderr_data(str![[r#"
-[ERROR] failed to write `b/src/lib.rs`: [..]
+[ERROR] failed to write `b/src/lib.rs`: Permission denied (os error 13)
 
 "#]])
         .run();
@@ -355,20 +354,20 @@ path = \"src/main.rs\"
 
     p.cargo_("fixit --allow-no-vcs --verbose")
         .with_stderr_data(str![[r#"
-     Checked foo v0.1.0 - build-script-build (custom-build)
-     Checked foo v0.1.0 - foo (lib)
      Checked foo v0.1.0 - app (bin)
      Checked foo v0.1.0 - build-script-build (custom-build)
      Checked foo v0.1.0 - foo (lib)
      Checked foo v0.1.0 - app (bin)
+     Checked foo v0.1.0 - foo (lib)
 [CHECKING] foo v0.1.0
-[FIXED] build.rs (1 fix)
-     Checked foo v0.1.0 - foo (lib)
-     Checked foo v0.1.0 - app (bin)
-[FIXED] src/lib.rs (1 fix)
-     Checked foo v0.1.0 - foo (lib)
-     Checked foo v0.1.0 - app (bin)
 [FIXED] src/main.rs (1 fix)
+     Checked foo v0.1.0 - app (bin)
+     Checked foo v0.1.0 - build-script-build (custom-build)
+     Checked foo v0.1.0 - foo (lib)
+[FIXED] build.rs (1 fix)
+     Checked foo v0.1.0 - app (bin)
+     Checked foo v0.1.0 - foo (lib)
+[FIXED] src/lib.rs (1 fix)
 
 "#]])
         .run();
@@ -400,20 +399,17 @@ resolver = "2"
 
     p.cargo_("fixit --workspace --allow-no-vcs --verbose")
         .with_status(0)
-        .with_stderr_data(
-            str![[r#"
-     Checked b v0.1.0 - b (lib)
-     Checked a v0.1.0 - a (lib)
+        .with_stderr_data(str![[r#"
      Checked a v0.1.0 - a (lib)
      Checked b v0.1.0 - b (lib)
-[CHECKING] b v0.1.0
-[FIXED] b/src/lib.rs (1 fix)
+     Checked a v0.1.0 - a (lib)
+     Checked b v0.1.0 - b (lib)
 [CHECKING] a v0.1.0
 [FIXED] a/src/lib.rs (1 fix)
+[CHECKING] b v0.1.0
+[FIXED] b/src/lib.rs (1 fix)
 
-"#]]
-            .unordered(),
-        )
+"#]])
         .run();
 }
 
@@ -472,34 +468,31 @@ fn fix_order_serial_packages() {
 
     p.cargo_("fixit --workspace --allow-no-vcs --verbose")
         .with_status(0)
-        .with_stderr_data(
-            str![[r#"
+        .with_stderr_data(str![[r#"
+     Checked a v0.1.0 - a (lib)
+     Checked b v0.1.0 - b (lib)
+     Checked c v0.1.0 - c (lib)
      Checked d v0.1.0 - d (lib)
-     Checked c v0.1.0 - c (lib)
-     Checked b v0.1.0 - b (lib)
-     Checked a v0.1.0 - a (lib)
-     Checked d v0.1.0 - d (lib)
-     Checked c v0.1.0 - c (lib)
-     Checked b v0.1.0 - b (lib)
-     Checked a v0.1.0 - a (lib)
-[CHECKING] d v0.1.0
-[FIXED] d/src/lib.rs (1 fix)
-     Checked c v0.1.0 - c (lib)
-     Checked b v0.1.0 - b (lib)
-     Checked a v0.1.0 - a (lib)
-[CHECKING] c v0.1.0
-[FIXED] c/src/lib.rs (1 fix)
-     Checked b v0.1.0 - b (lib)
-     Checked a v0.1.0 - a (lib)
-[CHECKING] b v0.1.0
-[FIXED] b/src/lib.rs (1 fix)
      Checked a v0.1.0 - a (lib)
 [CHECKING] a v0.1.0
 [FIXED] a/src/lib.rs (1 fix)
+     Checked a v0.1.0 - a (lib)
+     Checked b v0.1.0 - b (lib)
+[CHECKING] b v0.1.0
+[FIXED] b/src/lib.rs (1 fix)
+     Checked a v0.1.0 - a (lib)
+     Checked b v0.1.0 - b (lib)
+     Checked c v0.1.0 - c (lib)
+[CHECKING] c v0.1.0
+[FIXED] c/src/lib.rs (1 fix)
+     Checked a v0.1.0 - a (lib)
+     Checked b v0.1.0 - b (lib)
+     Checked c v0.1.0 - c (lib)
+     Checked d v0.1.0 - d (lib)
+[CHECKING] d v0.1.0
+[FIXED] d/src/lib.rs (1 fix)
 
-"#]]
-            .unordered(),
-        )
+"#]])
         .run();
 }
 
@@ -527,18 +520,15 @@ resolver = "2"
     std::fs::hard_link(&source, &hardlink).unwrap();
 
     p.cargo_("fixit --workspace --allow-no-vcs --broken-code --verbose")
-        .with_stderr_data(
-            str![[r#"
-     Checked b v0.1.0 - b (lib)
+        .with_stderr_data(str![[r#"
      Checked a v0.1.0 - a (lib)
      Checked b v0.1.0 - b (lib)
      Checked a v0.1.0 - a (lib)
+     Checked b v0.1.0 - b (lib)
 [CHECKING] a v0.1.0
 [FIXED] a/src/lib.rs (1 fix)
 
-"#]]
-            .unordered(),
-        )
+"#]])
         .run();
 }
 
@@ -606,44 +596,41 @@ a = {{ path = '../a' }}
         .build();
 
     p.cargo_("fixit --workspace --all-targets --allow-no-vcs --verbose")
-        .with_stderr_data(
-            str![[r#"
-     Checked a v0.1.0 - a (lib)
-     Checked c v0.1.0 - c (lib)
-     Checked c v0.1.0 - c (lib)
-     Checked b v0.1.0 - b (lib)
-     Checked b v0.1.0 - b (lib)
-     Checked a v0.1.0 - a (lib)
+        .with_stderr_data(str![[r#"
      Checked a v0.1.0 - cycle (test)
      Checked a v0.1.0 - a (lib)
-     Checked c v0.1.0 - c (lib)
-     Checked c v0.1.0 - c (lib)
-     Checked b v0.1.0 - b (lib)
-     Checked b v0.1.0 - b (lib)
      Checked a v0.1.0 - a (lib)
+     Checked b v0.1.0 - b (lib)
+     Checked b v0.1.0 - b (lib)
+     Checked c v0.1.0 - c (lib)
+     Checked c v0.1.0 - c (lib)
      Checked a v0.1.0 - cycle (test)
 [CHECKING] a v0.1.0
+[FIXED] a/tests/cycle.rs (1 fix)
+     Checked a v0.1.0 - cycle (test)
+     Checked a v0.1.0 - a (lib)
+     Checked a v0.1.0 - a (lib)
+     Checked b v0.1.0 - b (lib)
+     Checked b v0.1.0 - b (lib)
+     Checked c v0.1.0 - c (lib)
+     Checked c v0.1.0 - c (lib)
 [FIXED] a/src/lib.rs (1 fix)
-     Checked c v0.1.0 - c (lib)
-     Checked c v0.1.0 - c (lib)
-     Checked b v0.1.0 - b (lib)
-     Checked b v0.1.0 - b (lib)
-     Checked a v0.1.0 - a (lib)
      Checked a v0.1.0 - cycle (test)
-[CHECKING] c v0.1.0
-[FIXED] c/src/lib.rs (1 fix)
-     Checked b v0.1.0 - b (lib)
-     Checked b v0.1.0 - b (lib)
      Checked a v0.1.0 - a (lib)
-     Checked a v0.1.0 - cycle (test)
+     Checked b v0.1.0 - b (lib)
+     Checked b v0.1.0 - b (lib)
 [CHECKING] b v0.1.0
 [FIXED] b/src/lib.rs (1 fix)
      Checked a v0.1.0 - cycle (test)
-[FIXED] a/tests/cycle.rs (1 fix)
+     Checked a v0.1.0 - a (lib)
+     Checked b v0.1.0 - b (lib)
+     Checked b v0.1.0 - b (lib)
+     Checked c v0.1.0 - c (lib)
+     Checked c v0.1.0 - c (lib)
+[CHECKING] c v0.1.0
+[FIXED] c/src/lib.rs (1 fix)
 
-"#]]
-            .unordered(),
-        )
+"#]])
         .run();
 }
 
