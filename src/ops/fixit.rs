@@ -203,7 +203,7 @@ fn fix(
             anyhow::bail!("could not compile");
         }
 
-        let (mut errors, mut build_unit_map) =
+        let (mut errors, mut suggestions) =
             collect_errors(messages.into_iter(), &seen, &primary_packages);
 
         if iteration >= max_iterations {
@@ -212,10 +212,10 @@ fn fix(
             }
             let targets: Vec<_> = active_units.keys().cloned().collect();
             for target in targets {
-                if let Some(file_map) = build_unit_map.get(&target) {
+                if let Some(unit_suggestions) = suggestions.get(&target) {
                     let target_errors = errors.entry(target.clone()).or_default();
                     target_errors.extend(
-                        file_map
+                        unit_suggestions
                             .values()
                             .flatten()
                             .filter_map(|(_, diagnostic)| diagnostic.clone()),
@@ -231,11 +231,11 @@ fn fix(
         if !active_units.is_empty()
             && active_units
                 .keys()
-                .all(|target| build_unit_map.get(target).is_none_or(IndexMap::is_empty))
+                .all(|target| suggestions.get(target).is_none_or(IndexMap::is_empty))
         {
             let targets: Vec<_> = active_units.keys().cloned().collect();
             for target in targets {
-                build_unit_map.shift_remove(&target);
+                suggestions.shift_remove(&target);
                 finish_unit(target, active_units, &mut errors, &mut seen)?;
             }
             debug_assert!(active_units.is_empty());
@@ -249,7 +249,7 @@ fn fix(
         // Once a batch is active, recheck and finish it before considering additional units.
         let continuing_batch = !active_units.is_empty();
 
-        for (build_unit, file_map) in build_unit_map {
+        for (build_unit, unit_suggestions) in suggestions {
             if seen.contains(&build_unit) {
                 continue;
             }
@@ -258,7 +258,7 @@ fn fix(
                 .entry(build_unit.clone())
                 .or_insert_with(IndexSet::new);
 
-            if active_units.is_empty() && file_map.is_empty() {
+            if active_units.is_empty() && unit_suggestions.is_empty() {
                 if finalized_targets && build_unit_errors.is_empty() {
                     continue;
                 }
@@ -271,7 +271,7 @@ fn fix(
                 errors.shift_remove(&build_unit);
 
                 seen.insert(build_unit);
-            } else if !file_map.is_empty() {
+            } else if !unit_suggestions.is_empty() {
                 let was_active = active_units.contains_key(&build_unit);
                 if continuing_batch && !was_active {
                     continue;
@@ -307,7 +307,7 @@ fn fix(
                     }
                 }
 
-                let handles = file_map
+                let handles = unit_suggestions
                     .keys()
                     .map(same_file::Handle::from_path)
                     .collect::<Result<Vec<_>, _>>()
@@ -327,7 +327,7 @@ fn fix(
                 }
 
                 let target_files = active_units.entry(build_unit.clone()).or_default();
-                let changed = fix_errors(target_files, file_map, build_unit_errors)?;
+                let changed = fix_errors(target_files, unit_suggestions, build_unit_errors)?;
                 if !changed && !was_active {
                     active_units.shift_remove(&build_unit);
                 }
@@ -758,7 +758,7 @@ fn collect_errors(
     primary_packages: &PrimaryPackages,
 ) -> (BuildUnitErrors, BuildUnitSuggestions) {
     let only = HashSet::new();
-    let mut build_unit_map = IndexMap::new();
+    let mut suggestions = IndexMap::new();
 
     let mut errors = IndexMap::new();
 
@@ -770,7 +770,7 @@ fn collect_errors(
             CheckOutput::Message(m) => m,
             CheckOutput::Artifact(a) => {
                 if !seen.contains(&a.build_unit) && !a.fresh {
-                    build_unit_map
+                    suggestions
                         .entry(a.build_unit.clone())
                         .or_insert(IndexMap::new());
                 }
@@ -798,7 +798,7 @@ fn collect_errors(
             continue;
         }
 
-        let file_map = build_unit_map
+        let unit_suggestions = suggestions
             .entry(build_unit.clone())
             .or_insert(IndexMap::new());
 
@@ -860,23 +860,23 @@ fn collect_errors(
             }
         }
 
-        file_map
+        unit_suggestions
             .entry(file_name.to_owned())
             .or_insert_with(IndexSet::new)
             .insert((suggestion, diagnostic.rendered));
     }
 
-    (errors, build_unit_map)
+    (errors, suggestions)
 }
 
 #[tracing::instrument(skip_all)]
 fn fix_errors(
     files: &mut IndexMap<String, File>,
-    file_map: IndexMap<String, IndexSet<(Suggestion, Option<String>)>>,
+    unit_suggestions: IndexMap<String, IndexSet<(Suggestion, Option<String>)>>,
     errors: &mut IndexSet<String>,
 ) -> CargoResult<bool> {
     let mut made_changes = false;
-    for (file, suggestions) in file_map {
+    for (file, suggestions) in unit_suggestions {
         let source = match paths::read(file.as_ref()) {
             Ok(s) => s,
             Err(e) => {
