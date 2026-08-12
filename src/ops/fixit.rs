@@ -107,17 +107,15 @@ fn fix(
         .ok()
         .and_then(|i| i.parse().ok())
         .unwrap_or(4);
-    let mut iteration = 0;
-    let mut lint_cap = false;
-
-    let mut last_errors = IndexMap::new();
-    let mut claimed_files: HashMap<same_file::Handle, BuildUnit> = HashMap::new();
-    let mut package_graph_cache: Option<Option<PackageGraph>> = None;
-    let mut seen = HashSet::new();
-
     let package_metadata = package_metadata(&args.check_flags)?;
     let primary_packages = PrimaryPackages::from_metadata(&package_metadata, &args.check_flags)?;
+    let mut package_graph_cache: Option<Option<PackageGraph>> = None;
 
+    let mut iteration = 0;
+    let mut lint_cap = false;
+    let mut last_errors = IndexMap::new();
+    let mut claimed_files: HashMap<same_file::Handle, BuildUnit> = HashMap::new();
+    let mut seen = HashSet::new();
     loop {
         trace!("iteration={iteration}");
         trace!("active_units={active_units:?}");
