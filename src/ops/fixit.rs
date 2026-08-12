@@ -209,7 +209,7 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<BuildUnit, ActiveState>) ->
         }
 
         let (mut errors, mut suggestions) =
-            collect_errors(messages.into_iter(), &seen, &primary_packages);
+            collect_diagnostics(messages.into_iter(), &seen, &primary_packages);
 
         if iteration >= max_iterations {
             if active_units.is_empty() {
@@ -332,7 +332,7 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<BuildUnit, ActiveState>) ->
                 }
 
                 let state = active_units.entry(build_unit.clone()).or_default();
-                let changed = fix_errors(unit_suggestions, state, build_unit_errors)?;
+                let changed = fix_suggestions(unit_suggestions, state, build_unit_errors)?;
                 if !changed && !was_active {
                     active_units.shift_remove(&build_unit);
                 }
@@ -757,7 +757,7 @@ fn to_check_output(output: std::process::Output) -> (Vec<CheckOutput>, Option<i3
 }
 
 #[tracing::instrument(skip_all)]
-fn collect_errors(
+fn collect_diagnostics(
     messages: impl Iterator<Item = CheckOutput>,
     seen: &HashSet<BuildUnit>,
     primary_packages: &PrimaryPackages,
@@ -875,7 +875,7 @@ fn collect_errors(
 }
 
 #[tracing::instrument(skip_all)]
-fn fix_errors(
+fn fix_suggestions(
     unit_suggestions: IndexMap<String, IndexSet<(Suggestion, Option<String>)>>,
     state: &mut ActiveState,
     errors: &mut IndexSet<String>,
