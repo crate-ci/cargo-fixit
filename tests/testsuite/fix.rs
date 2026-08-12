@@ -464,9 +464,27 @@ resolver = '2'
         .with_stderr_data(str![[r#"
 [CHECKING] a v0.1.0
 [CHECKING] b v0.1.0
+[WARNING] variable does not need to be mutable
+ --> b/build.rs:1:16
+  |
+1 | fn main(){ let mut a = 1; let _ = a; }
+  |                ----^
+  |                |
+  |                [HELP] remove this `mut`
+  |
+  = [NOTE] `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+[WARNING] variable does not need to be mutable
+ --> b/src/lib.rs:1:31
+  |
+1 | pub fn value() -> usize { let mut value = 1; value }
+  |                               ----^^^^^
+  |                               |
+  |                               [HELP] remove this `mut`
+  |
+  = [NOTE] `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
 [FIXED] a/build.rs (1 fix)
-[FIXED] b/build.rs (1 fix)
-[FIXED] b/src/lib.rs (1 fix)
 [FIXED] a/src/lib.rs (1 fix)
 [FIXED] a/src/main.rs (1 fix)
 
@@ -487,9 +505,27 @@ resolver = '2'
         .with_stderr_data(str![[r#"
 [CHECKING] a v0.1.0
 [CHECKING] b v0.1.0
+[WARNING] variable does not need to be mutable
+ --> b/build.rs:1:16
+  |
+1 | fn main(){ let mut a = 1; let _ = a; }
+  |                ----^
+  |                |
+  |                [HELP] remove this `mut`
+  |
+  = [NOTE] `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+[WARNING] variable does not need to be mutable
+ --> b/src/lib.rs:1:31
+  |
+1 | pub fn value() -> usize { let mut value = 1; value }
+  |                               ----^^^^^
+  |                               |
+  |                               [HELP] remove this `mut`
+  |
+  = [NOTE] `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
 [FIXED] a/build.rs (1 fix)
-[FIXED] b/build.rs (1 fix)
-[FIXED] b/src/lib.rs (1 fix)
 [FIXED] a/src/lib.rs (1 fix)
 [FIXED] a/src/main.rs (1 fix)
 
@@ -545,9 +581,27 @@ dep = { path = '../dep' }
         .with_stderr_data(str![[r#"
 [CHECKING] app v0.1.0
 [CHECKING] dep v0.1.0
+[WARNING] variable does not need to be mutable
+ --> dep/build.rs:1:17
+  |
+1 | fn main() { let mut value = 1; let _ = value; }
+  |                 ----^^^^^
+  |                 |
+  |                 [HELP] remove this `mut`
+  |
+  = [NOTE] `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+[WARNING] variable does not need to be mutable
+ --> dep/src/lib.rs:1:20
+  |
+1 | pub fn dep() { let mut value = 1; let _ = value; }
+  |                    ----^^^^^
+  |                    |
+  |                    [HELP] remove this `mut`
+  |
+  = [NOTE] `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
 [FIXED] app/build.rs (1 fix)
-[FIXED] dep/build.rs (1 fix)
-[FIXED] dep/src/lib.rs (1 fix)
 [FIXED] app/src/lib.rs (1 fix)
 [FIXED] app/tests/selected.rs (1 fix)
 
