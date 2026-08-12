@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Fixes
+
+- Take build-unit selection flags into account when deciding which build units to fix
+
 ## [0.1.14] - 2026-08-12
 
 ### Features
