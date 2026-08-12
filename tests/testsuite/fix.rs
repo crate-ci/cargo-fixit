@@ -163,7 +163,7 @@ fn fix_broken_if_requested() {
 }
 
 #[cargo_test]
-fn fix_path_deps() {
+fn select_path_dep() {
     let p = project()
         .file(
             "Cargo.toml",
@@ -203,23 +203,19 @@ fn fix_path_deps() {
         .build();
 
     p.cargo_("fix --allow-no-vcs -p foo -p bar")
-        .env("__CARGO_FIX_YOLO", "1")
         .with_stdout_data("")
-        .with_stderr_data(
-            str![[r#"
+        .with_stderr_data(str![[r#"
 [CHECKING] bar v0.1.0
 [FIXED] bar/src/lib.rs (1 fix)
 [CHECKING] foo v0.1.0
 [FIXED] src/lib.rs (1 fix)
 
-"#]]
-            .unordered(),
-        )
+"#]])
         .run();
 }
 
 #[cargo_test]
-fn do_not_fix_non_relevant_deps() {
+fn select_implicit_ignores_path_dep() {
     let p = project()
         .no_manifest()
         .file(
@@ -236,7 +232,15 @@ fn do_not_fix_non_relevant_deps() {
                 [workspace]
             "#,
         )
-        .file("foo/src/lib.rs", "")
+        .file(
+            "foo/src/lib.rs",
+            r#"
+                pub fn foo() -> u32 {
+                    let mut x = 3;
+                    x
+                }
+            "#,
+        )
         .file("bar/Cargo.toml", &basic_manifest("bar", "0.1.0"))
         .file(
             "bar/src/lib.rs",
@@ -250,44 +254,353 @@ fn do_not_fix_non_relevant_deps() {
         .build();
 
     p.cargo_("fix --allow-no-vcs")
-        .env("__CARGO_FIX_YOLO", "1")
         .cwd("foo")
-        .run();
+        .with_stderr_data(str![[r#"
+[WARNING] variable does not need to be mutable
+ --> [ROOT]/foo/bar/src/lib.rs:3:25
+  |
+3 |                     let mut x = 3;
+  |                         ----^
+  |                         |
+  |                         [HELP] remove this `mut`
+  |
+  = [NOTE] `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
 
-    assert!(p.read_file("bar/src/lib.rs").contains("mut"));
+[CHECKING] bar v0.1.0
+[CHECKING] foo v0.1.0
+[FIXED] src/lib.rs (1 fix)
+
+"#]])
+        .run();
 }
 
 #[cargo_test]
-fn does_not_fix_dependency_of_default_workspace_member() {
+fn select_implicit_ignores_workspace_member() {
     let p = package_selection_project(
-        "[workspace]\nmembers = ['a', 'b']\ndefault-members = ['a']\nresolver = '2'\n",
+        "[workspace]
+members = ['a', 'b', 'c']
+default-members = ['a']
+resolver = '2'
+",
     );
 
-    p.cargo_("fix --allow-no-vcs").run();
+    p.cargo_("fix --allow-no-vcs")
+        .with_stderr_data(str![[r#"
+[CHECKING] a v0.1.0
+[CHECKING] b v0.1.0
+[WARNING] variable does not need to be mutable
+ --> b/build.rs:1:16
+  |
+1 | fn main(){ let mut a = 1; let _ = a; }
+  |                ----^
+  |                |
+  |                [HELP] remove this `mut`
+  |
+  = [NOTE] `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
 
-    assert!(!p.read_file("a/src/lib.rs").contains("let mut value"));
-    assert!(p.read_file("b/src/lib.rs").contains("let mut value"));
-}
+[WARNING] variable does not need to be mutable
+ --> b/src/lib.rs:1:31
+  |
+1 | pub fn value() -> usize { let mut value = 1; value }
+  |                               ----^^^^^
+  |                               |
+  |                               [HELP] remove this `mut`
+  |
+  = [NOTE] `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
 
-#[cargo_test]
-fn does_not_fix_dependency_of_selected_workspace_package() {
-    let p = package_selection_project("[workspace]\nmembers = ['a', 'b']\nresolver = '2'\n");
+[FIXED] a/build.rs (1 fix)
+[FIXED] a/src/lib.rs (1 fix)
+[FIXED] a/src/main.rs (1 fix)
 
-    p.cargo_("fix --package a --allow-no-vcs").run();
-
-    assert!(!p.read_file("a/src/lib.rs").contains("let mut value"));
-    assert!(p.read_file("b/src/lib.rs").contains("let mut value"));
-}
-
-#[cargo_test]
-fn does_not_fix_excluded_workspace_dependency() {
-    let p = package_selection_project("[workspace]\nmembers = ['a', 'b']\nresolver = '2'\n");
-
-    p.cargo_("fix --workspace --exclude b* --allow-no-vcs")
+"#]])
         .run();
+}
 
-    assert!(!p.read_file("a/src/lib.rs").contains("let mut value"));
-    assert!(p.read_file("b/src/lib.rs").contains("let mut value"));
+#[cargo_test]
+fn select_package_ignores_workspace_member() {
+    let p = package_selection_project(
+        "[workspace]
+members = ['a', 'b', 'c']
+resolver = '2'
+",
+    );
+
+    p.cargo_("fix --package a --allow-no-vcs")
+        .with_stderr_data(str![[r#"
+[CHECKING] a v0.1.0
+[CHECKING] b v0.1.0
+[WARNING] variable does not need to be mutable
+ --> b/build.rs:1:16
+  |
+1 | fn main(){ let mut a = 1; let _ = a; }
+  |                ----^
+  |                |
+  |                [HELP] remove this `mut`
+  |
+  = [NOTE] `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+[WARNING] variable does not need to be mutable
+ --> b/src/lib.rs:1:31
+  |
+1 | pub fn value() -> usize { let mut value = 1; value }
+  |                               ----^^^^^
+  |                               |
+  |                               [HELP] remove this `mut`
+  |
+  = [NOTE] `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+[FIXED] a/build.rs (1 fix)
+[FIXED] a/src/lib.rs (1 fix)
+[FIXED] a/src/main.rs (1 fix)
+
+"#]])
+        .run();
+}
+
+#[cargo_test]
+fn select_exclude_ignores_workspace_member() {
+    let p = package_selection_project(
+        "[workspace]
+members = ['a', 'b', 'c']
+resolver = '2'
+",
+    );
+
+    p.cargo_("fix --workspace --exclude b* --exclude c* --allow-no-vcs")
+        .with_stderr_data(str![[r#"
+[CHECKING] a v0.1.0
+[CHECKING] b v0.1.0
+[WARNING] variable does not need to be mutable
+ --> b/build.rs:1:16
+  |
+1 | fn main(){ let mut a = 1; let _ = a; }
+  |                ----^
+  |                |
+  |                [HELP] remove this `mut`
+  |
+  = [NOTE] `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+[WARNING] variable does not need to be mutable
+ --> b/src/lib.rs:1:31
+  |
+1 | pub fn value() -> usize { let mut value = 1; value }
+  |                               ----^^^^^
+  |                               |
+  |                               [HELP] remove this `mut`
+  |
+  = [NOTE] `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+[FIXED] a/build.rs (1 fix)
+[FIXED] a/src/lib.rs (1 fix)
+[FIXED] a/src/main.rs (1 fix)
+
+"#]])
+        .run();
+}
+
+#[cargo_test]
+fn select_workspace_lib() {
+    let p = package_selection_project(
+        "[workspace]
+members = ['a', 'b', 'c']
+resolver = '2'
+",
+    );
+
+    p.cargo_("fix --workspace --lib --allow-no-vcs")
+        .with_stderr_data(str![[r#"
+[CHECKING] a v0.1.0
+[CHECKING] b v0.1.0
+[CHECKING] c v0.1.0
+[FIXED] a/build.rs (1 fix)
+[FIXED] b/build.rs (1 fix)
+[FIXED] c/build.rs (1 fix)
+[FIXED] b/src/lib.rs (1 fix)
+[FIXED] c/src/lib.rs (1 fix)
+[FIXED] a/src/lib.rs (1 fix)
+
+"#]])
+        .run();
+}
+
+#[cargo_test]
+fn select_workspace_bins() {
+    let p = package_selection_project(
+        "[workspace]
+members = ['a', 'b', 'c']
+resolver = '2'
+",
+    );
+
+    p.cargo_("fix --workspace --bins --allow-no-vcs")
+        .with_stderr_data(str![[r#"
+[CHECKING] a v0.1.0
+[CHECKING] b v0.1.0
+[CHECKING] c v0.1.0
+[FIXED] a/build.rs (1 fix)
+[FIXED] b/build.rs (1 fix)
+[FIXED] c/build.rs (1 fix)
+[FIXED] b/src/lib.rs (1 fix)
+[FIXED] c/src/lib.rs (1 fix)
+[FIXED] a/src/lib.rs (1 fix)
+[FIXED] b/src/main.rs (1 fix)
+[FIXED] c/src/main.rs (1 fix)
+[FIXED] a/src/main.rs (1 fix)
+
+"#]])
+        .run();
+}
+
+#[cargo_test]
+fn select_workspace_bin() {
+    let p = package_selection_project(
+        "[workspace]
+members = ['a', 'b', 'c']
+resolver = '2'
+",
+    );
+
+    p.cargo_("fix --workspace --bin a --allow-no-vcs")
+        .with_stderr_data(str![[r#"
+[CHECKING] a v0.1.0
+[CHECKING] b v0.1.0
+[FIXED] a/build.rs (1 fix)
+[FIXED] b/build.rs (1 fix)
+[FIXED] b/src/lib.rs (1 fix)
+[FIXED] a/src/lib.rs (1 fix)
+[FIXED] a/src/main.rs (1 fix)
+
+"#]])
+        .run();
+}
+
+#[cargo_test]
+fn select_package_lib() {
+    let p = package_selection_project(
+        "[workspace]
+members = ['a', 'b', 'c']
+resolver = '2'
+",
+    );
+
+    p.cargo_("fix -p a --lib --allow-no-vcs")
+        .with_stderr_data(str![[r#"
+[CHECKING] a v0.1.0
+[CHECKING] b v0.1.0
+[WARNING] variable does not need to be mutable
+ --> b/build.rs:1:16
+  |
+1 | fn main(){ let mut a = 1; let _ = a; }
+  |                ----^
+  |                |
+  |                [HELP] remove this `mut`
+  |
+  = [NOTE] `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+[WARNING] variable does not need to be mutable
+ --> b/src/lib.rs:1:31
+  |
+1 | pub fn value() -> usize { let mut value = 1; value }
+  |                               ----^^^^^
+  |                               |
+  |                               [HELP] remove this `mut`
+  |
+  = [NOTE] `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+[FIXED] a/build.rs (1 fix)
+[FIXED] a/src/lib.rs (1 fix)
+
+"#]])
+        .run();
+}
+
+#[cargo_test]
+fn select_package_bins() {
+    let p = package_selection_project(
+        "[workspace]
+members = ['a', 'b', 'c']
+resolver = '2'
+",
+    );
+
+    p.cargo_("fix -p a --bins --allow-no-vcs")
+        .with_stderr_data(str![[r#"
+[CHECKING] a v0.1.0
+[CHECKING] b v0.1.0
+[WARNING] variable does not need to be mutable
+ --> b/build.rs:1:16
+  |
+1 | fn main(){ let mut a = 1; let _ = a; }
+  |                ----^
+  |                |
+  |                [HELP] remove this `mut`
+  |
+  = [NOTE] `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+[WARNING] variable does not need to be mutable
+ --> b/src/lib.rs:1:31
+  |
+1 | pub fn value() -> usize { let mut value = 1; value }
+  |                               ----^^^^^
+  |                               |
+  |                               [HELP] remove this `mut`
+  |
+  = [NOTE] `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+[FIXED] a/build.rs (1 fix)
+[FIXED] a/src/lib.rs (1 fix)
+[FIXED] a/src/main.rs (1 fix)
+
+"#]])
+        .run();
+}
+
+#[cargo_test]
+fn select_without_feature() {
+    let p = project()
+        .file(
+            "Cargo.toml",
+            "[workspace]
+members = ['a', 'b']
+resolver = '2'
+",
+        )
+        .file(
+            "a/Cargo.toml",
+            r#"
+                [package]
+                name = "a"
+                version = "0.1.0"
+                edition = "2021"
+
+                [dependencies]
+                b = { path = '../b', optional = true }
+            "#,
+        )
+        .file("a/build.rs", "fn main(){ let mut a = 1; let _ = a; }")
+        .file("a/src/main.rs", "fn main(){ let mut a = 1; let _ = a; }")
+        .file(
+            "a/src/lib.rs",
+            "pub fn value() -> usize { let mut value = 1; value }\n",
+        )
+        .file("b/Cargo.toml", &basic_manifest("b", "0.1.0"))
+        .file("b/build.rs", "fn main(){ let mut a = 1; let _ = a; }")
+        .file(
+            "b/src/lib.rs",
+            "pub fn value() -> usize { let mut value = 1; value }\n",
+        )
+        .file("b/src/main.rs", "fn main(){ let mut a = 1; let _ = a; }")
+        .build();
+
+    p.cargo_("fix -p a --allow-no-vcs")
+        .with_stderr_data(str![[r#"
+[CHECKING] a v0.1.0
+[FIXED] a/build.rs (1 fix)
+[FIXED] a/src/lib.rs (1 fix)
+[FIXED] a/src/main.rs (1 fix)
+
+"#]])
+        .run();
 }
 
 fn package_selection_project(workspace_manifest: &str) -> Project {
@@ -305,15 +618,26 @@ fn package_selection_project(workspace_manifest: &str) -> Project {
                 b = { path = '../b' }
             "#,
         )
+        .file("a/build.rs", "fn main(){ let mut a = 1; let _ = a; }")
+        .file("a/src/main.rs", "fn main(){ let mut a = 1; let _ = a; }")
         .file(
             "a/src/lib.rs",
             "pub fn value() -> usize { let mut value = b::value(); value }\n",
         )
         .file("b/Cargo.toml", &basic_manifest("b", "0.1.0"))
+        .file("b/build.rs", "fn main(){ let mut a = 1; let _ = a; }")
         .file(
             "b/src/lib.rs",
             "pub fn value() -> usize { let mut value = 1; value }\n",
         )
+        .file("b/src/main.rs", "fn main(){ let mut a = 1; let _ = a; }")
+        .file("c/Cargo.toml", &basic_manifest("c", "0.1.0"))
+        .file("c/build.rs", "fn main(){ let mut a = 1; let _ = a; }")
+        .file(
+            "c/src/lib.rs",
+            "pub fn value() -> usize { let mut value = 1; value }\n",
+        )
+        .file("c/src/main.rs", "fn main(){ let mut a = 1; let _ = a; }")
         .build()
 }
 
@@ -572,6 +896,7 @@ fn upgrade_extern_crate() {
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(str![[r#"
+[CHECKING] bar v0.1.0
 [CHECKING] foo v0.1.0
 [FIXED] src/lib.rs (1 fix)
 
@@ -1549,20 +1874,24 @@ fn doesnt_rebuild_dependencies() {
         .file("bar/src/lib.rs", "")
         .build();
 
-    p.cargo_("fix --allow-no-vcs -p foo")
+    p.cargo_("fix --allow-no-vcs -p foo --verbose")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stdout_data("")
         .with_stderr_data(str![[r#"
-[CHECKING] foo v0.1.0
+     Checked foo v0.1.0 - foo (lib)
+     Checked bar v0.1.0 - bar (lib)
 [CHECKING] bar v0.1.0
+[CHECKING] foo v0.1.0
 
 "#]])
         .run();
 
-    p.cargo_("fix --allow-no-vcs -p foo")
+    p.cargo_("fix --allow-no-vcs -p foo --verbose")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stdout_data("")
         .with_stderr_data(str![[r#"
+[CHECKING] bar v0.1.0
+[CHECKING] foo v0.1.0
 
 "#]])
         .run();
@@ -2017,6 +2346,7 @@ fn fix_shared_cross_workspace() {
         .with_stderr_data(
             str![[r#"
 [CHECKING] [..] v0.1.0
+[CHECKING] [..] v0.1.0
 [FIXED] [..]foo/src/shared.rs (2 fixes)
 
 "#]]
@@ -2101,6 +2431,8 @@ fn abnormal_exit() {
         )
         // "signal: 6, SIGABRT: process abort signal" on some platforms
         .with_stderr_data(str![[r#"
+[CHECKING] pm v0.1.0
+[CHECKING] foo v0.1.0
 [NOTE] reverting `src/lib.rs` to its original state
 [WARNING] failed to automatically apply fixes suggested by rustc
 
@@ -2403,6 +2735,7 @@ fn fix_in_dependency() {
     p.cargo_("fix --lib --allow-no-vcs")
         .env("RUSTC", &rustc_bin)
         .with_stderr_data(str![[r#"
+[CHECKING] bar v1.0.0
 [CHECKING] foo v0.1.0
 [WARNING] unused variable: `abc`
  --> [ROOT]/home/.cargo/registry/src/-[HASH]/bar-1.0.0/src/lib.rs:5:29
@@ -2412,7 +2745,6 @@ fn fix_in_dependency() {
   |
   = [NOTE] `#[warn(unused_variables)]` on by default
 
-[CHECKING] bar v1.0.0
 
 "#]])
         .run();

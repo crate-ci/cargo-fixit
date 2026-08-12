@@ -390,6 +390,7 @@ fn fix_verification_failed() {
         &[Step::OneFix, Step::Error],
         |_execs| {},
         str![[r#"
+[CHECKING] foo v0.0.1
 [NOTE] reverting `src/lib.rs` to its original state
 [WARNING] failed to automatically apply fixes suggested by rustc
 
@@ -430,6 +431,7 @@ fn fix_verification_failed_clippy() {
             execs.env("RUSTC_WORKSPACE_WRAPPER", wrapped_clippy_driver());
         },
         str![[r#"
+[CHECKING] foo v0.0.1
 [NOTE] reverting `src/lib.rs` to its original state
 [WARNING] failed to automatically apply fixes suggested by rustc
 
