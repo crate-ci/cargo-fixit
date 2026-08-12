@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+## [0.1.15] - 2026-08-12
+
 ### Fixes
 
 - Take build-unit selection flags into account when deciding which build units to fix
@@ -140,7 +142,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [0.1.0] - 2025-07-18
 
 <!-- next-url -->
-[Unreleased]: https://github.com/crate-ci/cargo-fixit/compare/v0.1.14...HEAD
+[Unreleased]: https://github.com/crate-ci/cargo-fixit/compare/v0.1.15...HEAD
+[0.1.15]: https://github.com/crate-ci/cargo-fixit/compare/v0.1.14...v0.1.15
 [0.1.14]: https://github.com/crate-ci/cargo-fixit/compare/v0.1.13...v0.1.14
 [0.1.13]: https://github.com/crate-ci/cargo-fixit/compare/v0.1.12...v0.1.13
 [0.1.12]: https://github.com/crate-ci/cargo-fixit/compare/v0.1.11...v0.1.12
