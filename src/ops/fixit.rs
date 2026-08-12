@@ -72,6 +72,11 @@ impl FixitArgs {
 }
 
 #[derive(Debug, Default)]
+struct ActiveState {
+    snapshots: IndexMap<String, File>,
+}
+
+#[derive(Debug, Default)]
 struct File {
     fixes: u32,
     original_source: String,
@@ -91,7 +96,10 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
     match fix(&args, &mut active_units) {
         Ok(()) => Ok(()),
         Err(error) => {
-            for (file, original) in active_units.values().flat_map(|files| files.iter()) {
+            for (file, original) in active_units
+                .values()
+                .flat_map(|state| state.snapshots.iter())
+            {
                 paths::write(file, &original.original_source)?;
             }
             Err(error)
@@ -99,10 +107,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
     }
 }
 
-fn fix(
-    args: &FixitArgs,
-    active_units: &mut IndexMap<BuildUnit, IndexMap<String, File>>,
-) -> CargoResult<()> {
+fn fix(args: &FixitArgs, active_units: &mut IndexMap<BuildUnit, ActiveState>) -> CargoResult<()> {
     let max_iterations: usize = env::var("CARGO_FIX_MAX_RETRIES")
         .ok()
         .and_then(|i| i.parse().ok())
@@ -143,7 +148,9 @@ fn fix(
                         fixes: _,
                         original_source,
                     },
-                ) in active_units.values().flat_map(|files| files.iter())
+                ) in active_units
+                    .values()
+                    .flat_map(|state| state.snapshots.iter())
                 {
                     out.push_str(&format!("  * {file}\n"));
                     shell::note(format!("reverting `{file}` to its original state"))?;
@@ -324,8 +331,8 @@ fn fix(
                     continue;
                 }
 
-                let target_files = active_units.entry(build_unit.clone()).or_default();
-                let changed = fix_errors(unit_suggestions, target_files, build_unit_errors)?;
+                let state = active_units.entry(build_unit.clone()).or_default();
+                let changed = fix_errors(unit_suggestions, state, build_unit_errors)?;
                 if !changed && !was_active {
                     active_units.shift_remove(&build_unit);
                 }
@@ -363,8 +370,8 @@ fn fix(
         }
     }
 
-    for files in active_units.values() {
-        for (name, file) in files {
+    for state in active_units.values() {
+        for (name, file) in &state.snapshots {
             shell::fixed(name, file.fixes)?;
         }
     }
@@ -629,7 +636,7 @@ impl PackageGraph {
 /// Marks a target complete after reporting its fixes and remaining diagnostics.
 fn finish_unit(
     unit: BuildUnit,
-    active_units: &mut IndexMap<BuildUnit, IndexMap<String, File>>,
+    active_units: &mut IndexMap<BuildUnit, ActiveState>,
     errors: &mut BuildUnitErrors,
     seen: &mut HashSet<BuildUnit>,
 ) -> CargoResult<()> {
@@ -640,8 +647,8 @@ fn finish_unit(
         shell::status("Checking", format_package_id(&unit.package_id)?)?;
     }
 
-    if let Some(files) = active_units.get(&unit) {
-        for (name, file) in files {
+    if let Some(state) = active_units.get(&unit) {
+        for (name, file) in &state.snapshots {
             shell::fixed(name, file.fixes)?;
         }
     }
@@ -870,7 +877,7 @@ fn collect_errors(
 #[tracing::instrument(skip_all)]
 fn fix_errors(
     unit_suggestions: IndexMap<String, IndexSet<(Suggestion, Option<String>)>>,
-    files: &mut IndexMap<String, File>,
+    state: &mut ActiveState,
     errors: &mut IndexSet<String>,
 ) -> CargoResult<bool> {
     let mut made_changes = false;
@@ -903,7 +910,7 @@ fn fix_errors(
         }
         if fixed.modified() {
             let new_source = fixed.finish()?;
-            let file_state = files.entry(file.clone()).or_insert(File {
+            let file_state = state.snapshots.entry(file.clone()).or_insert(File {
                 fixes: 0,
                 original_source: source,
             });
