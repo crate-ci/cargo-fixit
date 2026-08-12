@@ -325,7 +325,7 @@ fn fix(
                 }
 
                 let target_files = active_units.entry(build_unit.clone()).or_default();
-                let changed = fix_errors(target_files, unit_suggestions, build_unit_errors)?;
+                let changed = fix_errors(unit_suggestions, target_files, build_unit_errors)?;
                 if !changed && !was_active {
                     active_units.shift_remove(&build_unit);
                 }
@@ -869,8 +869,8 @@ fn collect_errors(
 
 #[tracing::instrument(skip_all)]
 fn fix_errors(
-    files: &mut IndexMap<String, File>,
     unit_suggestions: IndexMap<String, IndexSet<(Suggestion, Option<String>)>>,
+    files: &mut IndexMap<String, File>,
     errors: &mut IndexSet<String>,
 ) -> CargoResult<bool> {
     let mut made_changes = false;
