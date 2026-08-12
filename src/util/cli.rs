@@ -1,5 +1,7 @@
 use clap::Parser;
 
+use crate::CargoResult;
+
 #[derive(Debug, Parser)]
 pub struct CheckFlags {
     /// Package(s) to fix
@@ -149,6 +151,81 @@ impl CheckFlags {
             debug_assert!(self.exclude.is_empty());
             PackageSelection::Packages(&self.package)
         }
+    }
+
+    /// Whether one of this package's targets is explicitly selected for fixing.
+    pub(crate) fn selects_package_targets(
+        &self,
+        package: &cargo_metadata::Package,
+    ) -> CargoResult<bool> {
+        if self.all_targets || !self.has_target_selection() {
+            return Ok(true);
+        }
+
+        for target in &package.targets {
+            if self.selects_target(target)? {
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
+    }
+
+    fn has_target_selection(&self) -> bool {
+        self.lib
+            || self.bins
+            || self.bin.is_some()
+            || self.examples
+            || self.example.is_some()
+            || self.tests
+            || self.test.is_some()
+            || self.benches
+            || self.bench.is_some()
+    }
+
+    fn selects_target(&self, target: &cargo_metadata::Target) -> CargoResult<bool> {
+        let is_lib = target.kind.iter().any(|kind| {
+            matches!(
+                kind,
+                cargo_metadata::TargetKind::Lib
+                    | cargo_metadata::TargetKind::RLib
+                    | cargo_metadata::TargetKind::DyLib
+                    | cargo_metadata::TargetKind::CDyLib
+                    | cargo_metadata::TargetKind::StaticLib
+                    | cargo_metadata::TargetKind::ProcMacro
+            )
+        });
+
+        if self.lib && is_lib {
+            return Ok(true);
+        }
+        if self.bins && target.is_bin() {
+            return Ok(true);
+        }
+        if target.is_bin() && matches_target_name(self.bin.as_deref(), &target.name)? {
+            return Ok(true);
+        }
+        if self.examples && target.is_example() {
+            return Ok(true);
+        }
+        if target.is_example() && matches_target_name(self.example.as_deref(), &target.name)? {
+            return Ok(true);
+        }
+        if self.tests && (target.is_test() || target.test) {
+            return Ok(true);
+        }
+        if target.is_test() && matches_target_name(self.test.as_deref(), &target.name)? {
+            return Ok(true);
+        }
+        if self.benches && target.is_bench() {
+            // HACK: no `target.bench` in `cargo metadata` output
+            return Ok(true);
+        }
+        if target.is_bench() && matches_target_name(self.bench.as_deref(), &target.name)? {
+            return Ok(true);
+        }
+
+        Ok(false)
     }
 
     pub fn to_flags(&self) -> Vec<String> {
@@ -311,4 +388,14 @@ impl CheckFlags {
 
         out
     }
+}
+
+fn matches_target_name(requested: Option<&str>, actual: &str) -> CargoResult<bool> {
+    requested
+        .map(|pattern| {
+            glob::Pattern::new(pattern)
+                .map(|pattern| pattern.matches(actual))
+                .map_err(Into::into)
+        })
+        .unwrap_or(Ok(false))
 }

@@ -328,9 +328,9 @@ struct PrimaryPackages {
 }
 
 impl PrimaryPackages {
-    /// Reconstructs Cargo's primary package set from its package-selection flags.
+    /// Reconstructs Cargo's primary package set from its package and target selectors.
     fn from_metadata(metadata: &Metadata, flags: &CheckFlags) -> CargoResult<Self> {
-        let package_ids = match flags.package_selection() {
+        let mut package_ids = match flags.package_selection() {
             PackageSelection::Default => metadata
                 .workspace_default_members
                 .iter()
@@ -357,6 +357,13 @@ impl PrimaryPackages {
                 package_ids
             }
         };
+
+        for package in metadata.workspace_packages() {
+            if package_ids.contains(&package.id.repr) && !flags.selects_package_targets(package)? {
+                package_ids.remove(&package.id.repr);
+            }
+        }
+
         Ok(Self { package_ids })
     }
 
