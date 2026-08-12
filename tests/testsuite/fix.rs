@@ -475,6 +475,87 @@ resolver = '2'
 }
 
 #[cargo_test]
+fn select_workspace_bin_glob() {
+    let p = package_selection_project(
+        "[workspace]
+members = ['a', 'b', 'c']
+resolver = '2'
+",
+    );
+
+    p.cargo_("fix --workspace --bin a* --allow-no-vcs")
+        .with_stderr_data(str![[r#"
+[CHECKING] a v0.1.0
+[CHECKING] b v0.1.0
+[FIXED] a/build.rs (1 fix)
+[FIXED] b/build.rs (1 fix)
+[FIXED] b/src/lib.rs (1 fix)
+[FIXED] a/src/lib.rs (1 fix)
+[FIXED] a/src/main.rs (1 fix)
+
+"#]])
+        .run();
+}
+
+#[cargo_test]
+fn select_workspace_test_ignores_dependency() {
+    let p = project()
+        .file(
+            "Cargo.toml",
+            "[workspace]
+members = ['app', 'dep']
+resolver = '2'
+",
+        )
+        .file(
+            "app/Cargo.toml",
+            "[package]
+name = 'app'
+version = '0.1.0'
+edition = '2021'
+
+[dependencies]
+dep = { path = '../dep' }
+",
+        )
+        .file(
+            "app/build.rs",
+            "fn main() { let mut value = 1; let _ = value; }\n",
+        )
+        .file(
+            "app/src/lib.rs",
+            "pub fn app() { dep::dep(); let mut value = 1; let _ = value; }\n",
+        )
+        .file(
+            "app/tests/selected.rs",
+            "#[test] fn selected() { app::app(); let mut value = 1; let _ = value; }\n",
+        )
+        .file("dep/Cargo.toml", &basic_manifest("dep", "0.1.0"))
+        .file(
+            "dep/build.rs",
+            "fn main() { let mut value = 1; let _ = value; }\n",
+        )
+        .file(
+            "dep/src/lib.rs",
+            "pub fn dep() { let mut value = 1; let _ = value; }\n",
+        )
+        .build();
+
+    p.cargo_("fix --workspace --test selected --allow-no-vcs")
+        .with_stderr_data(str![[r#"
+[CHECKING] app v0.1.0
+[CHECKING] dep v0.1.0
+[FIXED] app/build.rs (1 fix)
+[FIXED] dep/build.rs (1 fix)
+[FIXED] dep/src/lib.rs (1 fix)
+[FIXED] app/src/lib.rs (1 fix)
+[FIXED] app/tests/selected.rs (1 fix)
+
+"#]])
+        .run();
+}
+
+#[cargo_test]
 fn select_package_lib() {
     let p = package_selection_project(
         "[workspace]
