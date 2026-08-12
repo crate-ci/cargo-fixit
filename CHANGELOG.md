@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Features
+
+- Add `--verbose`
+
+### Fixes
+
+- Track max fix iterations per build unit, rather than per batch of build units being fixed
+
+### Performance
+
+- Build bins, tests, benches, and examples in parallel
+- Process build units as they are ready, rather than waiting for a whole batch to be done
+
 ## [0.1.13] - 2026-08-05
 
 ### Fixes
