@@ -1873,17 +1873,19 @@ fn doesnt_rebuild_dependencies() {
         .file("bar/src/lib.rs", "")
         .build();
 
-    p.cargo_("fix --allow-no-vcs -p foo")
+    p.cargo_("fix --allow-no-vcs -p foo --verbose")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stdout_data("")
         .with_stderr_data(str![[r#"
+     Checked foo v0.1.0 - foo (lib)
+     Checked bar v0.1.0 - bar (lib)
 [CHECKING] foo v0.1.0
 [CHECKING] bar v0.1.0
 
 "#]])
         .run();
 
-    p.cargo_("fix --allow-no-vcs -p foo")
+    p.cargo_("fix --allow-no-vcs -p foo --verbose")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stdout_data("")
         .with_stderr_data(str![[r#"
