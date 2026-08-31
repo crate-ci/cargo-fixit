@@ -18,7 +18,6 @@ impl CheckOutput {
 }
 
 #[derive(Deserialize, Clone, Debug, Hash, PartialEq, Eq)]
-#[allow(dead_code)]
 pub struct Artifact {
     #[serde(flatten)]
     pub build_unit: BuildUnit,

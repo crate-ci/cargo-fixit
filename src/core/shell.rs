@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use anyhow::Context;
 use clap::builder::styling::Style;
 use clap_cargo::style::{ERROR, HEADER, NOTE, WARN};
