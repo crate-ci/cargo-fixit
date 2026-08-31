@@ -28,16 +28,16 @@ pub struct CliError {
 
 impl CliError {
     /// Attach an error code to an error
-    pub fn new(error: anyhow::Error, code: i32) -> CliError {
-        CliError {
+    pub fn new(error: anyhow::Error, code: i32) -> Self {
+        Self {
             error: Some(error),
             exit_code: code,
         }
     }
 
     /// Silent error
-    pub fn code(code: i32) -> CliError {
-        CliError {
+    pub fn code(code: i32) -> Self {
+        Self {
             error: None,
             exit_code: code,
         }
@@ -45,21 +45,21 @@ impl CliError {
 }
 
 impl From<anyhow::Error> for CliError {
-    fn from(err: anyhow::Error) -> CliError {
-        CliError::new(err, 101)
+    fn from(err: anyhow::Error) -> Self {
+        Self::new(err, 101)
     }
 }
 
 impl From<clap::Error> for CliError {
-    fn from(err: clap::Error) -> CliError {
-        #[allow(clippy::bool_to_int_with_if)]
+    fn from(err: clap::Error) -> Self {
+        #[expect(clippy::bool_to_int_with_if, reason = "be explicit on exit codes")]
         let code = if err.use_stderr() { 1 } else { 0 };
-        CliError::new(err.into(), code)
+        Self::new(err.into(), code)
     }
 }
 
 impl From<std::io::Error> for CliError {
-    fn from(err: std::io::Error) -> CliError {
-        CliError::new(err.into(), 1)
+    fn from(err: std::io::Error) -> Self {
+        Self::new(err.into(), 1)
     }
 }

@@ -48,8 +48,6 @@ where
         + Send
         + Sync,
 {
-    #![allow(clippy::disallowed_methods)]
-
     if env_to_bool(std::env::var_os("CARGO_LOG_PROFILE").as_deref()) {
         let capture_args =
             env_to_bool(std::env::var_os("CARGO_LOG_PROFILE_CAPTURE_ARGS").as_deref());
