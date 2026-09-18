@@ -5,10 +5,12 @@ use std::collections::HashSet;
 use std::env;
 use std::io::BufRead;
 use std::io::BufReader;
-use std::io::Cursor;
+use std::io::Read;
 use std::path::Path;
+use std::process::Child;
 use std::process::Command;
 use std::process::Stdio;
+use std::thread::JoinHandle;
 
 use anyhow::Context;
 use cargo_metadata::Metadata;
@@ -132,16 +134,19 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> Ca
     let mut claimed_files: HashMap<same_file::Handle, UnitId> = HashMap::new();
     loop {
         trace!("check ({active_units:?})");
-        let (mut messages, mut exit_code) = Check::run(args, lint_cap)?.into_check_output();
+        let mut check = Check::run(args, lint_cap)?;
+        let mut messages: Vec<_> = check.output().collect();
+        let (mut diagnostics, mut exit_code) = check.wait()?;
         if apply_lint_csp(&messages, exit_code, &mut lint_cap) {
-            (messages, exit_code) = Check::run(args, lint_cap)?.into_check_output();
+            let mut check = Check::run(args, lint_cap)?;
+            messages = check.output().collect();
+            (diagnostics, exit_code) = check.wait()?;
         }
         messages.sort_unstable_by_key(|m| m.build_unit().cloned());
         print_built(args, &messages)?;
 
         if messages.is_empty() && exit_code != Some(0) {
-            let mut command = args.to_command();
-            command.status()?;
+            shell::print_ansi_stderr(&diagnostics)?;
             anyhow::bail!("could not compile");
         } else if !args.broken_code && exit_code != Some(0) {
             let mut out = String::new();
@@ -187,13 +192,17 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> Ca
                     out.push_str(&format!("{}\n\n", e.trim_end()));
                 }
 
-                let (mut messages, mut exit_code) = Check::run(args, lint_cap)?.into_check_output();
+                let mut check = Check::run(args, lint_cap)?;
+                let mut messages: Vec<_> = check.output().collect();
+                let (_, mut exit_code) = check.wait()?;
                 #[expect(
                     unused_assignments,
                     reason = "protect against access to `exit_code` being added later and being wrong"
                 )]
                 if apply_lint_csp(&messages, exit_code, &mut lint_cap) {
-                    (messages, exit_code) = Check::run(args, lint_cap)?.into_check_output();
+                    let mut check = Check::run(args, lint_cap)?;
+                    messages = check.output().collect();
+                    (_, exit_code) = check.wait()?;
                 }
                 print_built(args, &messages)?;
                 let mut errors = messages
@@ -474,32 +483,46 @@ fn finish_unit(
 }
 
 struct Check {
-    output: std::process::Output,
+    child: Child,
+    diagnostics: JoinHandle<std::io::Result<Vec<u8>>>,
 }
 
 impl Check {
     fn run(args: &FixitArgs, lint_cap: bool) -> CargoResult<Self> {
         let mut command = args.to_command();
-        command
-            .args(["--message-format", "json-diagnostic-rendered-ansi"])
-            .stderr(Stdio::piped())
-            .stdout(Stdio::piped());
+        command.args(["--message-format", "json-diagnostic-rendered-ansi"]);
         if lint_cap {
             cap_lints(&mut command);
         }
-        let output = command.output()?;
-        Ok(Self { output })
+        let mut child = command
+            .stderr(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()?;
+        let mut stderr = child.stderr.take().expect("stderr is piped");
+        // Drain stderr while callers read stdout so neither pipe can block Cargo.
+        let diagnostics = std::thread::spawn(move || {
+            let mut diagnostics = Vec::new();
+            stderr.read_to_end(&mut diagnostics)?;
+            Ok(diagnostics)
+        });
+        Ok(Self { child, diagnostics })
     }
 
-    fn into_check_output(self) -> (Vec<CheckOutput>, Option<i32>) {
-        let buf = BufReader::new(Cursor::new(self.output.stdout));
-        (
-            buf.lines()
-                .map_while(|l| l.ok())
-                .filter_map(|l| serde_json::from_str(&l).ok())
-                .collect(),
-            self.output.status.code(),
-        )
+    fn output(&mut self) -> impl Iterator<Item = CheckOutput> {
+        let stdout = self.child.stdout.take().expect("stdout is piped");
+        BufReader::new(stdout)
+            .lines()
+            .map_while(|line| line.ok())
+            .filter_map(|line| serde_json::from_str(&line).ok())
+    }
+
+    fn wait(self) -> CargoResult<(Vec<u8>, Option<i32>)> {
+        let output = self.child.wait_with_output()?;
+        let diagnostics = self
+            .diagnostics
+            .join()
+            .map_err(|_| anyhow::anyhow!("failed to read cargo diagnostics: thread panicked"))??;
+        Ok((diagnostics, output.status.code()))
     }
 }
 
