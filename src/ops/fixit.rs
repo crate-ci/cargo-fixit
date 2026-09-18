@@ -475,13 +475,20 @@ fn check(args: &FixitArgs, lint_cap: &mut bool) -> CargoResult<(Vec<CheckOutput>
     let output = command.output()?;
     let mut output = to_check_output(output);
 
-    if output.1 != Some(0) && !*lint_cap && denied_lint(&output.0) {
-        *lint_cap = true;
+    if apply_lint_csp(&output.0, output.1, lint_cap) {
         cap_lints(&mut command);
         output = to_check_output(command.output()?);
     }
 
     Ok(output)
+}
+
+fn apply_lint_csp(output: &[CheckOutput], status: Option<i32>, lint_cap: &mut bool) -> bool {
+    if !*lint_cap && status != Some(0) && !*lint_cap && denied_lint(output) {
+        *lint_cap = true;
+    }
+
+    *lint_cap
 }
 
 fn print_built(args: &FixitArgs, messages: &[CheckOutput]) -> CargoResult<()> {
