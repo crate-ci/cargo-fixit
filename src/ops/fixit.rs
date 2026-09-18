@@ -132,7 +132,10 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> Ca
     let mut claimed_files: HashMap<same_file::Handle, UnitId> = HashMap::new();
     loop {
         trace!("check ({active_units:?})");
-        let (mut messages, exit_code) = check(args, &mut lint_cap)?;
+        let (mut messages, mut exit_code) = check(args, lint_cap)?;
+        if apply_lint_csp(&messages, exit_code, &mut lint_cap) {
+            (messages, exit_code) = check(args, lint_cap)?;
+        }
         messages.sort_unstable_by_key(|m| m.build_unit().cloned());
         print_built(args, &messages)?;
 
@@ -184,7 +187,14 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> Ca
                     out.push_str(&format!("{}\n\n", e.trim_end()));
                 }
 
-                let (messages, _) = check(args, &mut lint_cap)?;
+                let (mut messages, mut exit_code) = check(args, lint_cap)?;
+                #[expect(
+                    unused_assignments,
+                    reason = "protect against access to `exit_code` being added later and being wrong"
+                )]
+                if apply_lint_csp(&messages, exit_code, &mut lint_cap) {
+                    (messages, exit_code) = check(args, lint_cap)?;
+                }
                 print_built(args, &messages)?;
                 let mut errors = messages
                     .into_iter()
@@ -463,22 +473,17 @@ fn finish_unit(
     Ok(())
 }
 
-fn check(args: &FixitArgs, lint_cap: &mut bool) -> CargoResult<(Vec<CheckOutput>, Option<i32>)> {
+fn check(args: &FixitArgs, lint_cap: bool) -> CargoResult<(Vec<CheckOutput>, Option<i32>)> {
     let mut command = args.to_command();
     command
         .args(["--message-format", "json-diagnostic-rendered-ansi"])
         .stderr(Stdio::piped())
         .stdout(Stdio::piped());
-    if *lint_cap {
+    if lint_cap {
         cap_lints(&mut command);
     }
     let output = command.output()?;
-    let mut output = to_check_output(output);
-
-    if apply_lint_csp(&output.0, output.1, lint_cap) {
-        cap_lints(&mut command);
-        output = to_check_output(command.output()?);
-    }
+    let output = to_check_output(output);
 
     Ok(output)
 }
