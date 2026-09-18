@@ -132,9 +132,9 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> Ca
     let mut claimed_files: HashMap<same_file::Handle, UnitId> = HashMap::new();
     loop {
         trace!("check ({active_units:?})");
-        let (mut messages, mut exit_code) = check(args, lint_cap)?;
+        let (mut messages, mut exit_code) = Check::run(args, lint_cap)?.into_check_output();
         if apply_lint_csp(&messages, exit_code, &mut lint_cap) {
-            (messages, exit_code) = check(args, lint_cap)?;
+            (messages, exit_code) = Check::run(args, lint_cap)?.into_check_output();
         }
         messages.sort_unstable_by_key(|m| m.build_unit().cloned());
         print_built(args, &messages)?;
@@ -187,13 +187,13 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> Ca
                     out.push_str(&format!("{}\n\n", e.trim_end()));
                 }
 
-                let (mut messages, mut exit_code) = check(args, lint_cap)?;
+                let (mut messages, mut exit_code) = Check::run(args, lint_cap)?.into_check_output();
                 #[expect(
                     unused_assignments,
                     reason = "protect against access to `exit_code` being added later and being wrong"
                 )]
                 if apply_lint_csp(&messages, exit_code, &mut lint_cap) {
-                    (messages, exit_code) = check(args, lint_cap)?;
+                    (messages, exit_code) = Check::run(args, lint_cap)?.into_check_output();
                 }
                 print_built(args, &messages)?;
                 let mut errors = messages
@@ -473,19 +473,34 @@ fn finish_unit(
     Ok(())
 }
 
-fn check(args: &FixitArgs, lint_cap: bool) -> CargoResult<(Vec<CheckOutput>, Option<i32>)> {
-    let mut command = args.to_command();
-    command
-        .args(["--message-format", "json-diagnostic-rendered-ansi"])
-        .stderr(Stdio::piped())
-        .stdout(Stdio::piped());
-    if lint_cap {
-        cap_lints(&mut command);
-    }
-    let output = command.output()?;
-    let output = to_check_output(output);
+struct Check {
+    output: std::process::Output,
+}
 
-    Ok(output)
+impl Check {
+    fn run(args: &FixitArgs, lint_cap: bool) -> CargoResult<Self> {
+        let mut command = args.to_command();
+        command
+            .args(["--message-format", "json-diagnostic-rendered-ansi"])
+            .stderr(Stdio::piped())
+            .stdout(Stdio::piped());
+        if lint_cap {
+            cap_lints(&mut command);
+        }
+        let output = command.output()?;
+        Ok(Self { output })
+    }
+
+    fn into_check_output(self) -> (Vec<CheckOutput>, Option<i32>) {
+        let buf = BufReader::new(Cursor::new(self.output.stdout));
+        (
+            buf.lines()
+                .map_while(|l| l.ok())
+                .filter_map(|l| serde_json::from_str(&l).ok())
+                .collect(),
+            self.output.status.code(),
+        )
+    }
 }
 
 fn apply_lint_csp(output: &[CheckOutput], status: Option<i32>, lint_cap: &mut bool) -> bool {
@@ -555,17 +570,6 @@ fn denied_lint(messages: &[CheckOutput]) -> bool {
                 if message.message.level == DiagnosticLevel::Error
                     && message.message.diagnostic.code.is_some())
     })
-}
-
-fn to_check_output(output: std::process::Output) -> (Vec<CheckOutput>, Option<i32>) {
-    let buf = BufReader::new(Cursor::new(output.stdout));
-    (
-        buf.lines()
-            .map_while(|l| l.ok())
-            .filter_map(|l| serde_json::from_str(&l).ok())
-            .collect(),
-        output.status.code(),
-    )
 }
 
 #[tracing::instrument(skip_all)]
