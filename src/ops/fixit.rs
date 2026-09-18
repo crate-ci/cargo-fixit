@@ -205,16 +205,7 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> Ca
                     print_built(args, &message)?;
                     messages.push(message);
                 }
-                let (_, mut exit_code) = check.wait()?;
-                #[expect(
-                    unused_assignments,
-                    reason = "protect against access to `exit_code` being added later and being wrong"
-                )]
-                if apply_lint_csp(&messages, exit_code, &mut lint_cap) {
-                    let mut check = Check::run(args, lint_cap)?;
-                    messages = check.output().collect();
-                    (_, exit_code) = check.wait()?;
-                }
+                let _ = check.wait()?;
                 let mut errors = messages
                     .into_iter()
                     .filter_map(|e| match e {
