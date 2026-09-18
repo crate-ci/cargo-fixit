@@ -141,7 +141,7 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> Ca
             messages.push(message);
         }
         let (mut diagnostics, mut exit_code) = check.wait()?;
-        if apply_lint_csp(&messages, exit_code, &mut lint_cap) {
+        if apply_lint_cap(&messages, exit_code, &mut lint_cap) {
             let mut check = Check::run(args, lint_cap)?;
             messages.clear();
             for message in check.output() {
@@ -525,7 +525,7 @@ impl Check {
     }
 }
 
-fn apply_lint_csp(output: &[CheckOutput], status: Option<i32>, lint_cap: &mut bool) -> bool {
+fn apply_lint_cap(output: &[CheckOutput], status: Option<i32>, lint_cap: &mut bool) -> bool {
     if !*lint_cap && status != Some(0) && !*lint_cap && denied_lint(output) {
         *lint_cap = true;
     }
