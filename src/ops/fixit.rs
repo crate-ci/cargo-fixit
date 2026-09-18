@@ -216,11 +216,9 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> Ca
                 if errors.peek().is_some() {
                     out.push_str("The original errors are:\n");
                 }
-
                 for e in errors {
                     out.push_str(&format!("{}\n\n", e.trim_end()));
                 }
-
                 shell::warn(out)?;
             } else {
                 for e in messages.into_iter().filter_map(|e| match e {
