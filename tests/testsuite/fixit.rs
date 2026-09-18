@@ -1,6 +1,7 @@
 use cargo_test_support::basic_manifest;
 use cargo_test_support::cargo_test;
 use cargo_test_support::compare::assert_ui;
+use cargo_test_support::prelude::*;
 use cargo_test_support::project;
 use cargo_test_support::Project;
 use snapbox::str;
@@ -383,7 +384,8 @@ path = \"src/main.rs\"
         .build();
 
     p.cargo_("fixit --allow-no-vcs --verbose")
-        .with_stderr_data(str![[r#"
+        .with_stderr_data(
+            str![[r#"
      Checked foo v0.1.0 - app (bin)
      Checked foo v0.1.0 - build-script-build (custom-build)
      Checked foo v0.1.0 - foo (lib)
@@ -399,7 +401,9 @@ path = \"src/main.rs\"
      Checked foo v0.1.0 - foo (lib)
 [FIXED] src/main.rs (1 fix)
 
-"#]])
+"#]]
+            .unordered(),
+        )
         .run();
 }
 
@@ -469,7 +473,8 @@ dep = {{ path = '../dep' }}
         .build();
 
     p.cargo_("fixit --workspace --allow-no-vcs --target host-tuple --verbose")
-        .with_stderr_data(str![[r#"
+        .with_stderr_data(
+            str![[r#"
      Checked app v0.1.0 - app (bin)
      Checked app v0.1.0 - build-script-build (custom-build)
      Checked dep v0.1.0 - dep (lib)
@@ -487,7 +492,9 @@ dep = {{ path = '../dep' }}
      Checked app v0.1.0 - app (bin)
 [FIXED] app/src/main.rs (1 fix)
 
-"#]])
+"#]]
+            .unordered(),
+        )
         .run();
 }
 
@@ -568,7 +575,8 @@ fn main(){ let mut a = 1; let _ = a; }
         .build();
 
     p.cargo_("fixit --allow-no-vcs --all-targets --verbose")
-        .with_stderr_data(str![[r#"
+        .with_stderr_data(
+            str![[r#"
      Checked foo v0.1.0 - app (bin)
      Checked foo v0.1.0 - app (bin)
      Checked foo v0.1.0 - test_a (test)
@@ -599,7 +607,9 @@ fn main(){ let mut a = 1; let _ = a; }
 [FIXED] examples/examp_a.rs (1 fix)
 [FIXED] examples/examp_b.rs (1 fix)
 
-"#]])
+"#]]
+            .unordered(),
+        )
         .run();
 }
 
@@ -629,7 +639,8 @@ resolver = "2"
 
     p.cargo_("fixit --workspace --allow-no-vcs --verbose")
         .with_status(0)
-        .with_stderr_data(str![[r#"
+        .with_stderr_data(
+            str![[r#"
      Checked a v0.1.0 - a (lib)
      Checked b v0.1.0 - b (lib)
 [CHECKING] a v0.1.0
@@ -639,7 +650,9 @@ resolver = "2"
 [FIXED] a/src/lib.rs (1 fix)
 [FIXED] b/src/lib.rs (1 fix)
 
-"#]])
+"#]]
+            .unordered(),
+        )
         .run();
 }
 
@@ -698,7 +711,8 @@ fn fix_order_serial_packages() {
 
     p.cargo_("fixit --workspace --allow-no-vcs --verbose")
         .with_status(0)
-        .with_stderr_data(str![[r#"
+        .with_stderr_data(
+            str![[r#"
      Checked a v0.1.0 - a (lib)
      Checked b v0.1.0 - b (lib)
      Checked c v0.1.0 - c (lib)
@@ -722,7 +736,9 @@ fn fix_order_serial_packages() {
      Checked a v0.1.0 - a (lib)
 [FIXED] a/src/lib.rs (1 fix)
 
-"#]])
+"#]]
+            .unordered(),
+        )
         .run();
 }
 
@@ -750,7 +766,8 @@ resolver = "2"
     std::fs::hard_link(&source, &hardlink).unwrap();
 
     p.cargo_("fixit --workspace --allow-no-vcs --broken-code --verbose")
-        .with_stderr_data(str![[r#"
+        .with_stderr_data(
+            str![[r#"
      Checked a v0.1.0 - a (lib)
      Checked b v0.1.0 - b (lib)
 [CHECKING] a v0.1.0
@@ -759,7 +776,9 @@ resolver = "2"
      Checked b v0.1.0 - b (lib)
 [FIXED] a/src/lib.rs (1 fix)
 
-"#]])
+"#]]
+            .unordered(),
+        )
         .run();
 }
 
@@ -827,7 +846,8 @@ a = {{ path = '../a' }}
         .build();
 
     p.cargo_("fixit --workspace --all-targets --allow-no-vcs --verbose")
-        .with_stderr_data(str![[r#"
+        .with_stderr_data(
+            str![[r#"
      Checked a v0.1.0 - cycle (test)
      Checked a v0.1.0 - a (lib)
      Checked a v0.1.0 - a (lib)
@@ -861,7 +881,9 @@ a = {{ path = '../a' }}
      Checked a v0.1.0 - cycle (test)
 [FIXED] a/tests/cycle.rs (1 fix)
 
-"#]])
+"#]]
+            .unordered(),
+        )
         .run();
 }
 
@@ -898,7 +920,8 @@ shared = {{ path = '../shared' }}
         .build();
 
     p.cargo_("fixit --workspace --target host-tuple --allow-no-vcs --verbose")
-        .with_stderr_data(str![[r#"
+        .with_stderr_data(
+            str![[r#"
      Checked app v0.1.0 - build-script-build (custom-build)
      Checked app v0.1.0 - app (lib)
      Checked shared v0.1.0 - shared (lib)
@@ -911,7 +934,9 @@ shared = {{ path = '../shared' }}
 [FIXED] shared/src/lib.rs (1 fix)
 [CHECKING] app v0.1.0
 
-"#]])
+"#]]
+            .unordered(),
+        )
         .run();
 
     assert!(!p.read_file("shared/src/lib.rs").contains("let mut value"));
