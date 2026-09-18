@@ -2012,13 +2012,16 @@ fn doesnt_rebuild_dependencies() {
     p.cargo_("fix --allow-no-vcs -p foo --verbose")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stdout_data("")
-        .with_stderr_data(str![[r#"
+        .with_stderr_data(
+            str![[r#"
      Checked foo v0.1.0 - foo (lib)
      Checked bar v0.1.0 - bar (lib)
 [CHECKING] bar v0.1.0
 [CHECKING] foo v0.1.0
 
-"#]])
+"#]]
+            .unordered(),
+        )
         .run();
 
     p.cargo_("fix --allow-no-vcs -p foo --verbose")

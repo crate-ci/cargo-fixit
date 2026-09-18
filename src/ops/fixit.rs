@@ -5,10 +5,12 @@ use std::collections::HashSet;
 use std::env;
 use std::io::BufRead;
 use std::io::BufReader;
-use std::io::Cursor;
+use std::io::Read;
 use std::path::Path;
+use std::process::Child;
 use std::process::Command;
 use std::process::Stdio;
+use std::thread::JoinHandle;
 
 use anyhow::Context;
 use cargo_metadata::Metadata;
@@ -132,13 +134,26 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> Ca
     let mut claimed_files: HashMap<same_file::Handle, UnitId> = HashMap::new();
     loop {
         trace!("check ({active_units:?})");
-        let (mut messages, exit_code) = check(args, &mut lint_cap)?;
+        let mut check = Check::run(args, lint_cap)?;
+        let mut messages = Vec::new();
+        for message in check.output() {
+            print_built(args, &message)?;
+            messages.push(message);
+        }
+        let (mut diagnostics, mut exit_code) = check.wait()?;
+        if apply_lint_csp(&messages, exit_code, &mut lint_cap) {
+            let mut check = Check::run(args, lint_cap)?;
+            messages.clear();
+            for message in check.output() {
+                print_built(args, &message)?;
+                messages.push(message);
+            }
+            (diagnostics, exit_code) = check.wait()?;
+        }
         messages.sort_unstable_by_key(|m| m.build_unit().cloned());
-        print_built(args, &messages)?;
 
         if messages.is_empty() && exit_code != Some(0) {
-            let mut command = args.to_command();
-            command.status()?;
+            shell::print_ansi_stderr(&diagnostics)?;
             anyhow::bail!("could not compile");
         } else if !args.broken_code && exit_code != Some(0) {
             let mut out = String::new();
@@ -184,8 +199,22 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> Ca
                     out.push_str(&format!("{}\n\n", e.trim_end()));
                 }
 
-                let (messages, _) = check(args, &mut lint_cap)?;
-                print_built(args, &messages)?;
+                let mut check = Check::run(args, lint_cap)?;
+                let mut messages = Vec::new();
+                for message in check.output() {
+                    print_built(args, &message)?;
+                    messages.push(message);
+                }
+                let (_, mut exit_code) = check.wait()?;
+                #[expect(
+                    unused_assignments,
+                    reason = "protect against access to `exit_code` being added later and being wrong"
+                )]
+                if apply_lint_csp(&messages, exit_code, &mut lint_cap) {
+                    let mut check = Check::run(args, lint_cap)?;
+                    messages = check.output().collect();
+                    (_, exit_code) = check.wait()?;
+                }
                 let mut errors = messages
                     .into_iter()
                     .filter_map(|e| match e {
@@ -197,11 +226,9 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> Ca
                 if errors.peek().is_some() {
                     out.push_str("The original errors are:\n");
                 }
-
                 for e in errors {
                     out.push_str(&format!("{}\n\n", e.trim_end()));
                 }
-
                 shell::warn(out)?;
             } else {
                 for e in messages.into_iter().filter_map(|e| match e {
@@ -463,54 +490,83 @@ fn finish_unit(
     Ok(())
 }
 
-fn check(args: &FixitArgs, lint_cap: &mut bool) -> CargoResult<(Vec<CheckOutput>, Option<i32>)> {
-    let mut command = args.to_command();
-    command
-        .args(["--message-format", "json-diagnostic-rendered-ansi"])
-        .stderr(Stdio::piped())
-        .stdout(Stdio::piped());
-    if *lint_cap {
-        cap_lints(&mut command);
-    }
-    let output = command.output()?;
-    let mut output = to_check_output(output);
-
-    if output.1 != Some(0) && !*lint_cap && denied_lint(&output.0) {
-        *lint_cap = true;
-        cap_lints(&mut command);
-        output = to_check_output(command.output()?);
-    }
-
-    Ok(output)
+struct Check {
+    child: Child,
+    diagnostics: JoinHandle<std::io::Result<Vec<u8>>>,
 }
 
-fn print_built(args: &FixitArgs, messages: &[CheckOutput]) -> CargoResult<()> {
+impl Check {
+    fn run(args: &FixitArgs, lint_cap: bool) -> CargoResult<Self> {
+        let mut command = args.to_command();
+        command.args(["--message-format", "json-diagnostic-rendered-ansi"]);
+        if lint_cap {
+            cap_lints(&mut command);
+        }
+        let mut child = command
+            .stderr(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()?;
+        let mut stderr = child.stderr.take().expect("stderr is piped");
+        // Drain stderr while callers read stdout so neither pipe can block Cargo.
+        let diagnostics = std::thread::spawn(move || {
+            let mut diagnostics = Vec::new();
+            stderr.read_to_end(&mut diagnostics)?;
+            Ok(diagnostics)
+        });
+        Ok(Self { child, diagnostics })
+    }
+
+    fn output(&mut self) -> impl Iterator<Item = CheckOutput> {
+        let stdout = self.child.stdout.take().expect("stdout is piped");
+        BufReader::new(stdout)
+            .lines()
+            .map_while(|line| line.ok())
+            .filter_map(|line| serde_json::from_str(&line).ok())
+    }
+
+    fn wait(self) -> CargoResult<(Vec<u8>, Option<i32>)> {
+        let output = self.child.wait_with_output()?;
+        let diagnostics = self
+            .diagnostics
+            .join()
+            .map_err(|_| anyhow::anyhow!("failed to read cargo diagnostics: thread panicked"))??;
+        Ok((diagnostics, output.status.code()))
+    }
+}
+
+fn apply_lint_csp(output: &[CheckOutput], status: Option<i32>, lint_cap: &mut bool) -> bool {
+    if !*lint_cap && status != Some(0) && !*lint_cap && denied_lint(output) {
+        *lint_cap = true;
+    }
+
+    *lint_cap
+}
+
+fn print_built(args: &FixitArgs, message: &CheckOutput) -> CargoResult<()> {
     if args.verbose == 0 {
         return Ok(());
     }
 
-    for message in messages {
-        match message {
-            CheckOutput::Message(_) => {}
-            CheckOutput::Artifact(a) => {
-                if !a.fresh {
-                    let pkg_id = format_package_id(&a.build_unit.package_id)?;
-                    let name = &a.build_unit.target.name;
-                    let kind = &a.build_unit.target.kind;
-                    let kind = if 1 < kind.len() {
-                        "lib" // HACK: if its multiple, it is only a lib
-                    } else {
-                        match &kind[0] {
-                            TargetKind::Bin => "bin",
-                            TargetKind::Test => "test",
-                            TargetKind::Bench => "bench",
-                            TargetKind::Example => "example",
-                            TargetKind::CustomBuild => "custom-build",
-                            TargetKind::Lib(_) => "lib",
-                        }
-                    };
-                    shell::status("Checked", format!("{pkg_id} - {name} ({kind})"))?;
-                }
+    match message {
+        CheckOutput::Message(_) => {}
+        CheckOutput::Artifact(a) => {
+            if !a.fresh {
+                let pkg_id = format_package_id(&a.build_unit.package_id)?;
+                let name = &a.build_unit.target.name;
+                let kind = &a.build_unit.target.kind;
+                let kind = if 1 < kind.len() {
+                    "lib" // HACK: if its multiple, it is only a lib
+                } else {
+                    match &kind[0] {
+                        TargetKind::Bin => "bin",
+                        TargetKind::Test => "test",
+                        TargetKind::Bench => "bench",
+                        TargetKind::Example => "example",
+                        TargetKind::CustomBuild => "custom-build",
+                        TargetKind::Lib(_) => "lib",
+                    }
+                };
+                shell::status("Checked", format!("{pkg_id} - {name} ({kind})"))?;
             }
         }
     }
@@ -543,17 +599,6 @@ fn denied_lint(messages: &[CheckOutput]) -> bool {
                 if message.message.level == DiagnosticLevel::Error
                     && message.message.diagnostic.code.is_some())
     })
-}
-
-fn to_check_output(output: std::process::Output) -> (Vec<CheckOutput>, Option<i32>) {
-    let buf = BufReader::new(Cursor::new(output.stdout));
-    (
-        buf.lines()
-            .map_while(|l| l.ok())
-            .filter_map(|l| serde_json::from_str(&l).ok())
-            .collect(),
-        output.status.code(),
-    )
 }
 
 #[tracing::instrument(skip_all)]
