@@ -136,9 +136,45 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> Ca
         trace!("check ({active_units:?})");
         let mut check = Check::run(args, lint_cap)?;
         let mut messages = Vec::new();
-        for message in check.output() {
-            print_built(args, &message)?;
-            messages.push(message);
+        {
+            let mut errors = IndexMap::new();
+            for message in check.output() {
+                if first {
+                    match &message {
+                        CheckOutput::Message(Message {
+                            build_unit,
+                            message: MessageDiagnostic { diagnostic, .. },
+                        }) => {
+                            let package_id = &build_unit.package_id;
+                            let unit_id = UnitId::from_message(build_unit);
+                            if !is_local(package_id) || !plan.dependencies.contains_key(&unit_id) {
+                                if let Some(rendered) = diagnostic.rendered.clone() {
+                                    let errors =
+                                        errors.entry(unit_id).or_insert_with(IndexSet::new);
+                                    errors.insert(rendered);
+                                }
+                            }
+                        }
+                        CheckOutput::Artifact(a) => {
+                            let package_id = &a.build_unit.package_id;
+                            let unit_id = UnitId::from_message(&a.build_unit);
+                            if !is_local(package_id) || !plan.dependencies.contains_key(&unit_id) {
+                                for error in errors.get(&unit_id).into_iter().flatten() {
+                                    shell::print_ansi_stderr(
+                                        format!("{}\n\n", error.trim_end()).as_bytes(),
+                                    )?;
+                                }
+                                if !a.fresh && seen.insert(package_id.to_owned()) {
+                                    shell::status("Checking", format_package_id(package_id)?)?;
+                                }
+                            }
+                        }
+                    }
+                }
+                print_built(args, &message)?;
+                messages.push(message);
+            }
+            first = false;
         }
         let (mut diagnostics, mut exit_code) = check.wait()?;
         if apply_lint_cap(&messages, exit_code, &mut lint_cap) {
@@ -232,38 +268,6 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> Ca
 
             shell::note("try using `--broken-code` to fix errors")?;
             anyhow::bail!("could not compile");
-        }
-        if first {
-            first = false;
-            let mut errors = IndexMap::new();
-            for message in &messages {
-                match message {
-                    CheckOutput::Message(Message {
-                        build_unit,
-                        message: MessageDiagnostic { diagnostic, .. },
-                    }) => {
-                        let unit_id = UnitId::from_message(build_unit);
-                        if let Some(rendered) = diagnostic.rendered.clone() {
-                            let errors = errors.entry(unit_id).or_insert_with(IndexSet::new);
-                            errors.insert(rendered);
-                        }
-                    }
-                    CheckOutput::Artifact(a) => {
-                        let package_id = &a.build_unit.package_id;
-                        let unit_id = UnitId::from_message(&a.build_unit);
-                        if !is_local(package_id) || !plan.dependencies.contains_key(&unit_id) {
-                            for error in errors.get(&unit_id).into_iter().flatten() {
-                                shell::print_ansi_stderr(
-                                    format!("{}\n\n", error.trim_end()).as_bytes(),
-                                )?;
-                            }
-                            if !a.fresh && seen.insert(package_id.to_owned()) {
-                                shell::status("Checking", format_package_id(package_id)?)?;
-                            }
-                        }
-                    }
-                }
-            }
         }
 
         let observed_packages: HashSet<String> = messages
