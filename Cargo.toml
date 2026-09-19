@@ -116,7 +116,7 @@ debug = "line-tables-only"
 
 [package]
 name = "cargo-fixit"
-version = "0.1.15"
+version = "0.1.16"
 description = "Proposed fixit commands for cargo"
 categories = []
 keywords = []
