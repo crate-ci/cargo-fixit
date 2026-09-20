@@ -50,6 +50,10 @@ pub struct FixitArgs {
     #[arg(long = "Zdangerous-parallel-fixes")]
     dangerous_parallel_fixes: bool,
 
+    /// Selection of fixes to be applied each round
+    #[arg(long = "Zbatch", conflicts_with = "dangerous_parallel_fixes")]
+    batch: Option<BatchStrategy>,
+
     #[command(flatten)]
     color: colorchoice_clap::Color,
 
@@ -64,7 +68,10 @@ pub struct FixitArgs {
 }
 
 impl FixitArgs {
-    pub fn exec(self) -> CargoResult<()> {
+    pub fn exec(mut self) -> CargoResult<()> {
+        if self.dangerous_parallel_fixes {
+            self.batch = Some(BatchStrategy::AllDangerous);
+        }
         exec(self)
     }
 
@@ -75,6 +82,13 @@ impl FixitArgs {
         command.arg(cmd).args(self.check_flags.to_flags());
         command
     }
+}
+
+#[derive(Debug, Copy, Clone, Default, clap::ValueEnum)]
+enum BatchStrategy {
+    #[default]
+    DependencyOrdered,
+    AllDangerous,
 }
 
 #[derive(Debug, Default)]
@@ -121,10 +135,9 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> Ca
         .unwrap_or(4);
     let package_metadata = package_metadata(&args.check_flags)?;
     let primary_packages = PrimaryPackages::from_metadata(&package_metadata, &args.check_flags)?;
-    let mut plan = if args.dangerous_parallel_fixes {
-        UnitGraph::flat(&package_metadata)
-    } else {
-        UnitGraph::new(&package_metadata)
+    let mut plan = match args.batch.unwrap_or_default() {
+        BatchStrategy::DependencyOrdered => UnitGraph::new(&package_metadata),
+        BatchStrategy::AllDangerous => UnitGraph::flat(&package_metadata),
     };
     trace!("plan `{plan:#?}`");
 
