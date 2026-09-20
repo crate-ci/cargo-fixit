@@ -70,6 +70,9 @@ pub struct FixitArgs {
 impl FixitArgs {
     pub fn exec(mut self) -> CargoResult<()> {
         if self.dangerous_parallel_fixes {
+            shell::warn(
+                "`--Zdangerous-parallel-fixes` is deprecated, see instead `--Zbatch=all-dangerous`",
+            )?;
             self.batch = Some(BatchStrategy::AllDangerous);
         }
         exec(self)
