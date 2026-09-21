@@ -408,6 +408,90 @@ path = \"src/main.rs\"
 }
 
 #[cargo_test]
+fn fix_order_build_unit_batch_one() {
+    let p = project()
+        .file(
+            "Cargo.toml",
+            &format!(
+                "{}
+[[bin]]
+name = \"app\"
+path = \"src/main.rs\"
+",
+                basic_manifest("foo", "0.1.0")
+            ),
+        )
+        .file("build.rs", "fn main(){ let mut a = 1; let _ = a; }")
+        .file("src/lib.rs", "fn _a(){ let mut a = 1; let _ = a; }")
+        .file("src/main.rs", "fn main(){ let mut a = 1; let _ = a; }")
+        .build();
+
+    p.cargo_("fixit --allow-no-vcs --verbose")
+        .arg("--Zbatch=one")
+        .with_stderr_data(
+            str![[r#"
+     Checked foo v0.1.0 - build-script-build (custom-build)
+     Checked foo v0.1.0 - foo (lib)
+     Checked foo v0.1.0 - app (bin)
+[CHECKING] foo v0.1.0
+     Checked foo v0.1.0 - build-script-build (custom-build)
+     Checked foo v0.1.0 - foo (lib)
+     Checked foo v0.1.0 - app (bin)
+[FIXED] build.rs (1 fix)
+     Checked foo v0.1.0 - foo (lib)
+     Checked foo v0.1.0 - app (bin)
+[FIXED] src/lib.rs (1 fix)
+     Checked foo v0.1.0 - foo (lib)
+     Checked foo v0.1.0 - app (bin)
+[FIXED] src/main.rs (1 fix)
+
+"#]]
+            .unordered(),
+        )
+        .run();
+}
+
+#[cargo_test]
+fn fix_order_build_unit_batch_all() {
+    let p = project()
+        .file(
+            "Cargo.toml",
+            &format!(
+                "{}
+[[bin]]
+name = \"app\"
+path = \"src/main.rs\"
+",
+                basic_manifest("foo", "0.1.0")
+            ),
+        )
+        .file("build.rs", "fn main(){ let mut a = 1; let _ = a; }")
+        .file("src/lib.rs", "fn _a(){ let mut a = 1; let _ = a; }")
+        .file("src/main.rs", "fn main(){ let mut a = 1; let _ = a; }")
+        .build();
+
+    p.cargo_("fixit --allow-no-vcs --verbose")
+        .arg("--Zbatch=all-dangerous")
+        .with_stderr_data(
+            str![[r#"
+     Checked foo v0.1.0 - build-script-build (custom-build)
+     Checked foo v0.1.0 - foo (lib)
+     Checked foo v0.1.0 - app (bin)
+[CHECKING] foo v0.1.0
+     Checked foo v0.1.0 - build-script-build (custom-build)
+     Checked foo v0.1.0 - foo (lib)
+     Checked foo v0.1.0 - app (bin)
+[FIXED] src/main.rs (1 fix)
+[FIXED] build.rs (1 fix)
+[FIXED] src/lib.rs (1 fix)
+
+"#]]
+            .unordered(),
+        )
+        .run();
+}
+
+#[cargo_test]
 fn fix_order_multiple_lib_crate_types() {
     let p = project()
         .file(

@@ -1,4 +1,4 @@
-<svg width="1121px" height="1028px" xmlns="http://www.w3.org/2000/svg">
+<svg width="1163px" height="1028px" xmlns="http://www.w3.org/2000/svg">
   <style>
     .fg { fill: #AAAAAA }
     .bg { fill: #000000 }
@@ -32,7 +32,7 @@
 </tspan>
     <tspan x="10px" y="154px"><tspan>      --Zdangerous-parallel-fixes  Fix all targets together, risking stale suggestions</tspan>
 </tspan>
-    <tspan x="10px" y="172px"><tspan>      --Zbatch &lt;BATCH&gt;             Selection of fixes to be applied each round [possible values: dependency-ordered, all-dangerous]</tspan>
+    <tspan x="10px" y="172px"><tspan>      --Zbatch &lt;BATCH&gt;             Selection of fixes to be applied each round [possible values: one, dependency-ordered, all-dangerous]</tspan>
 </tspan>
     <tspan x="10px" y="190px"><tspan>      --color &lt;WHEN&gt;               Controls when to use color [default: auto] [possible values: auto, always, never]</tspan>
 </tspan>

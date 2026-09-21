@@ -89,6 +89,7 @@ impl FixitArgs {
 
 #[derive(Debug, Copy, Clone, Default, clap::ValueEnum)]
 enum BatchStrategy {
+    One,
     #[default]
     DependencyOrdered,
     AllDangerous,
@@ -140,6 +141,11 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> Ca
     let primary_packages = PrimaryPackages::from_metadata(&package_metadata, &args.check_flags)?;
     let mut plan = match args.batch.unwrap_or_default() {
         BatchStrategy::DependencyOrdered => UnitGraph::new(&package_metadata),
+        BatchStrategy::One => {
+            let mut graph = UnitGraph::new(&package_metadata);
+            graph.make_linear();
+            graph
+        }
         BatchStrategy::AllDangerous => UnitGraph::flat(&package_metadata),
     };
     trace!("plan `{plan:#?}`");
@@ -861,7 +867,7 @@ impl UnitId {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct UnitGraph {
     dependencies: BTreeMap<UnitId, BTreeSet<UnitId>>,
     finished: BTreeSet<UnitId>,
@@ -978,6 +984,26 @@ impl UnitGraph {
         Self {
             dependencies,
             finished: Default::default(),
+        }
+    }
+
+    /// Add a chain of dependencies in topological order so only one unit is ready at a time.
+    fn make_linear(&mut self) {
+        let mut graph = self.clone();
+        let mut previous = None;
+        while !graph.is_empty() {
+            let ready = graph.take_ready();
+            assert!(!ready.is_empty(), "{graph:#?}");
+            for unit_id in &ready {
+                if let Some(previous) = previous {
+                    self.dependencies
+                        .get_mut(unit_id)
+                        .expect("ready unit is in the graph")
+                        .insert(previous);
+                }
+                previous = Some(unit_id.clone());
+            }
+            graph.mark_finished(ready);
         }
     }
 
