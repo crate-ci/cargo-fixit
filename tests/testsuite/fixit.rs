@@ -384,6 +384,7 @@ path = \"src/main.rs\"
         .build();
 
     p.cargo_("fixit --allow-no-vcs --verbose")
+        .arg("--Zbatch=dependency-ordered")
         .with_stderr_data(
             str![[r#"
      Checked foo v0.1.0 - app (bin)
@@ -511,6 +512,7 @@ crate-type = ["rlib", "cdylib"]
         .build();
 
     p.cargo_("fixit --allow-no-vcs --verbose")
+        .arg("--Zbatch=dependency-ordered")
         .with_stderr_data(str![[r#"
      Checked foo v0.1.0 - foo (lib)
 [CHECKING] foo v0.1.0
@@ -557,6 +559,7 @@ dep = {{ path = '../dep' }}
         .build();
 
     p.cargo_("fixit --workspace --allow-no-vcs --target host-tuple --verbose")
+        .arg("--Zbatch=dependency-ordered")
         .with_stderr_data(
             str![[r#"
      Checked app v0.1.0 - app (bin)
@@ -659,6 +662,7 @@ fn main(){ let mut a = 1; let _ = a; }
         .build();
 
     p.cargo_("fixit --allow-no-vcs --all-targets --verbose")
+        .arg("--Zbatch=dependency-ordered")
         .with_stderr_data(
             str![[r#"
      Checked foo v0.1.0 - app (bin)
@@ -722,6 +726,7 @@ resolver = "2"
         .build();
 
     p.cargo_("fixit --workspace --allow-no-vcs --verbose")
+        .arg("--Zbatch=dependency-ordered")
         .with_status(0)
         .with_stderr_data(
             str![[r#"
@@ -794,6 +799,7 @@ fn fix_order_serial_packages() {
         .build();
 
     p.cargo_("fixit --workspace --allow-no-vcs --verbose")
+        .arg("--Zbatch=dependency-ordered")
         .with_status(0)
         .with_stderr_data(
             str![[r#"
@@ -850,6 +856,7 @@ resolver = "2"
     std::fs::hard_link(&source, &hardlink).unwrap();
 
     p.cargo_("fixit --workspace --allow-no-vcs --broken-code --verbose")
+        .arg("--Zbatch=dependency-ordered")
         .with_stderr_data(
             str![[r#"
      Checked a v0.1.0 - a (lib)
@@ -930,6 +937,7 @@ a = {{ path = '../a' }}
         .build();
 
     p.cargo_("fixit --workspace --all-targets --allow-no-vcs --verbose")
+        .arg("--Zbatch=dependency-ordered")
         .with_stderr_data(
             str![[r#"
      Checked a v0.1.0 - cycle (test)
