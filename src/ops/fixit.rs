@@ -298,7 +298,7 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> Ca
             .map(|unit| unit.package_id.clone())
             .collect();
         let (mut errors, suggestions) = collect_diagnostics(
-            messages.into_iter(),
+            messages.iter(),
             &plan.finished,
             &primary_packages,
             active_units,
@@ -619,8 +619,8 @@ fn denied_lint(messages: &[CheckOutput]) -> bool {
 }
 
 #[tracing::instrument(skip_all)]
-fn collect_diagnostics(
-    messages: impl Iterator<Item = CheckOutput>,
+fn collect_diagnostics<'a>(
+    messages: impl Iterator<Item = &'a CheckOutput>,
     finished: &BTreeSet<UnitId>,
     primary_packages: &PrimaryPackages,
     active_units: &mut IndexMap<UnitId, ActiveState>,
@@ -644,7 +644,7 @@ fn collect_diagnostics(
             }
         };
 
-        let unit_id = UnitId::from_message(&build_unit);
+        let unit_id = UnitId::from_message(build_unit);
         if finished.contains(&unit_id) {
             trace!("rejecting build unit `{:?}` already finished", build_unit);
             continue;
@@ -657,7 +657,7 @@ fn collect_diagnostics(
                     build_unit
                 );
                 let errors = errors.entry(unit_id).or_insert_with(IndexSet::new);
-                if let Some(rendered) = diagnostic.rendered {
+                if let Some(rendered) = diagnostic.rendered.clone() {
                     errors.insert(rendered);
                 }
                 continue;
@@ -670,7 +670,7 @@ fn collect_diagnostics(
                 build_unit
             );
             let errors = errors.entry(unit_id).or_insert_with(IndexSet::new);
-            if let Some(rendered) = diagnostic.rendered {
+            if let Some(rendered) = diagnostic.rendered.clone() {
                 errors.insert(rendered);
             }
             continue;
@@ -681,10 +681,10 @@ fn collect_diagnostics(
         } else {
             rustfix::Filter::MachineApplicableOnly
         };
-        let Some(suggestion) = collect_suggestions(&diagnostic, &only, filter) else {
+        let Some(suggestion) = collect_suggestions(diagnostic, &only, filter) else {
             trace!("rejecting as not a MachineApplicable diagnosis: {diagnostic:?}");
             let errors = errors.entry(unit_id).or_insert_with(IndexSet::new);
-            if let Some(rendered) = diagnostic.rendered {
+            if let Some(rendered) = diagnostic.rendered.clone() {
                 errors.insert(rendered);
             }
             continue;
@@ -699,7 +699,7 @@ fn collect_diagnostics(
         let Some(file_name) = file_names.next() else {
             trace!("rejecting as it has no solutions {:?}", suggestion);
             let errors = errors.entry(unit_id).or_insert_with(IndexSet::new);
-            if let Some(rendered) = diagnostic.rendered {
+            if let Some(rendered) = diagnostic.rendered.clone() {
                 errors.insert(rendered);
             }
             continue;
@@ -708,7 +708,7 @@ fn collect_diagnostics(
         if !file_names.all(|f| f == file_name) {
             trace!("rejecting as it changes multiple files: {:?}", suggestion);
             let errors = errors.entry(unit_id).or_insert_with(IndexSet::new);
-            if let Some(rendered) = diagnostic.rendered {
+            if let Some(rendered) = diagnostic.rendered.clone() {
                 errors.insert(rendered);
             }
             continue;
@@ -719,7 +719,7 @@ fn collect_diagnostics(
         if let Ok(home) = env::var("CARGO_HOME") {
             if file_path.starts_with(home) {
                 let errors = errors.entry(unit_id).or_insert_with(IndexSet::new);
-                if let Some(rendered) = diagnostic.rendered {
+                if let Some(rendered) = diagnostic.rendered.clone() {
                     errors.insert(rendered);
                 }
                 continue;
@@ -730,7 +730,7 @@ fn collect_diagnostics(
             if let Some(sysroot) = get_sysroot() {
                 if file_path.starts_with(sysroot) {
                     let errors = errors.entry(unit_id).or_insert_with(IndexSet::new);
-                    if let Some(rendered) = diagnostic.rendered {
+                    if let Some(rendered) = diagnostic.rendered.clone() {
                         errors.insert(rendered);
                     }
                     continue;
@@ -744,7 +744,7 @@ fn collect_diagnostics(
         unit_suggestions
             .entry(file_name.to_owned())
             .or_insert_with(IndexSet::new)
-            .insert((suggestion, diagnostic.rendered));
+            .insert((suggestion, diagnostic.rendered.clone()));
     }
 
     (errors, suggestions)
