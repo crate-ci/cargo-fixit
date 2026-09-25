@@ -270,32 +270,7 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> Ca
             break;
         }
 
-        'units: for (unit_id, state) in active_units.iter_mut() {
-            let unit_suggestions = suggestions
-                .get(unit_id)
-                .expect("finished all active_units without suggestions");
-            for path in state.snapshots.keys().chain(unit_suggestions.keys()) {
-                let Ok(handle) = same_file::Handle::from_path(path) else {
-                    continue;
-                };
-                match claimed_files.entry(handle) {
-                    std::collections::hash_map::Entry::Occupied(entry)
-                        if entry.get() != unit_id =>
-                    {
-                        trace!("deferring `{unit_id:?}` due to contention over {path}");
-                        claimed_files.retain(|_k, v| v != unit_id);
-                        continue 'units;
-                    }
-                    std::collections::hash_map::Entry::Occupied(_) => {}
-                    std::collections::hash_map::Entry::Vacant(entry) => {
-                        entry.insert(unit_id.clone());
-                    }
-                }
-            }
-            trace!("fixing `{unit_id:?}` {state:?}");
-            state.iterations += 1;
-            let _made_changes = fix_suggestions(unit_suggestions, state)?;
-        }
+        fix_batch(&suggestions, active_units, &mut claimed_files)?;
     }
     Ok(())
 }
@@ -786,6 +761,39 @@ fn collect_diagnostics<'a>(
     }
 
     (errors, suggestions)
+}
+
+#[tracing::instrument(skip_all)]
+fn fix_batch(
+    suggestions: &BuildUnitSuggestions,
+    active_units: &mut IndexMap<UnitId, ActiveState>,
+    claimed_files: &mut HashMap<same_file::Handle, UnitId>,
+) -> CargoResult<()> {
+    'units: for (unit_id, state) in active_units.iter_mut() {
+        let unit_suggestions = suggestions
+            .get(unit_id)
+            .expect("finished all active_units without suggestions");
+        for path in state.snapshots.keys().chain(unit_suggestions.keys()) {
+            let Ok(handle) = same_file::Handle::from_path(path) else {
+                continue;
+            };
+            match claimed_files.entry(handle) {
+                std::collections::hash_map::Entry::Occupied(entry) if entry.get() != unit_id => {
+                    trace!("deferring `{unit_id:?}` due to contention over {path}");
+                    claimed_files.retain(|_k, v| v != unit_id);
+                    continue 'units;
+                }
+                std::collections::hash_map::Entry::Occupied(_) => {}
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    entry.insert(unit_id.clone());
+                }
+            }
+        }
+        trace!("fixing `{unit_id:?}` {state:?}");
+        state.iterations += 1;
+        let _made_changes = fix_suggestions(unit_suggestions, state)?;
+    }
+    Ok(())
 }
 
 #[tracing::instrument(skip_all)]
