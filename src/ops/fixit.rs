@@ -471,35 +471,7 @@ fn run_check(
     let mut errors = BuildUnitErrors::new();
     for message in check.output() {
         if *first {
-            match &message {
-                CheckOutput::Message(Message {
-                    build_unit,
-                    message: MessageDiagnostic { diagnostic, .. },
-                }) => {
-                    let package_id = &build_unit.package_id;
-                    let unit_id = UnitId::from_message(build_unit);
-                    if !is_local(package_id) || !plan.dependencies.contains_key(&unit_id) {
-                        if let Some(rendered) = diagnostic.rendered.clone() {
-                            let errors = errors.entry(unit_id).or_default();
-                            errors.insert(rendered);
-                        }
-                    }
-                }
-                CheckOutput::Artifact(a) => {
-                    let package_id = &a.build_unit.package_id;
-                    let unit_id = UnitId::from_message(&a.build_unit);
-                    if !is_local(package_id) || !plan.dependencies.contains_key(&unit_id) {
-                        for error in errors.get(&unit_id).into_iter().flatten() {
-                            shell::print_ansi_stderr(
-                                format!("{}\n\n", error.trim_end()).as_bytes(),
-                            )?;
-                        }
-                        if !a.fresh && seen.insert(package_id.to_owned()) {
-                            shell::status("Checking", format_package_id(package_id)?)?;
-                        }
-                    }
-                }
-            }
+            print_unplanned(&message, plan, seen, &mut errors)?;
         }
         print_built(args, &message)?;
         messages.push(message);
@@ -587,6 +559,42 @@ fn apply_lint_cap(output: &[CheckOutput], status: Option<i32>, lint_cap: &mut bo
     }
 
     *lint_cap
+}
+
+fn print_unplanned(
+    message: &CheckOutput,
+    plan: &UnitGraph,
+    seen: &mut BTreeSet<String>,
+    errors: &mut BuildUnitErrors,
+) -> CargoResult<()> {
+    match message {
+        CheckOutput::Message(Message {
+            build_unit,
+            message: MessageDiagnostic { diagnostic, .. },
+        }) => {
+            let package_id = &build_unit.package_id;
+            let unit_id = UnitId::from_message(build_unit);
+            if !is_local(package_id) || !plan.dependencies.contains_key(&unit_id) {
+                if let Some(rendered) = diagnostic.rendered.clone() {
+                    let errors = errors.entry(unit_id).or_default();
+                    errors.insert(rendered);
+                }
+            }
+        }
+        CheckOutput::Artifact(a) => {
+            let package_id = &a.build_unit.package_id;
+            let unit_id = UnitId::from_message(&a.build_unit);
+            if !is_local(package_id) || !plan.dependencies.contains_key(&unit_id) {
+                for error in errors.get(&unit_id).into_iter().flatten() {
+                    shell::print_ansi_stderr(format!("{}\n\n", error.trim_end()).as_bytes())?;
+                }
+                if !a.fresh && seen.insert(package_id.to_owned()) {
+                    shell::status("Checking", format_package_id(package_id)?)?;
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 fn print_built(args: &FixitArgs, message: &CheckOutput) -> CargoResult<()> {
