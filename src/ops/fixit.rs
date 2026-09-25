@@ -121,12 +121,7 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
     match fix(&args, &mut active_units) {
         Ok(()) => Ok(()),
         Err(error) => {
-            for (file, original) in active_units
-                .values()
-                .flat_map(|state| state.snapshots.iter())
-            {
-                paths::write(file, &original.original_source)?;
-            }
+            revert_units(&active_units)?;
             Err(error)
         }
     }
@@ -223,20 +218,14 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> Ca
                     compiler reported errors within these files:\n\n",
                 );
 
-                for (
-                    file,
-                    File {
-                        fixes: _,
-                        original_source,
-                    },
-                ) in active_units
+                for file in active_units
                     .values()
-                    .flat_map(|state| state.snapshots.iter())
+                    .flat_map(|state| state.snapshots.keys())
                 {
                     out.push_str(&format!("  * {file}\n"));
                     shell::note(format!("reverting `{file}` to its original state"))?;
-                    paths::write(file, original_source)?;
                 }
+                revert_units(active_units)?;
                 active_units.clear();
                 out.push('\n');
 
@@ -504,6 +493,16 @@ fn finish_unit(
         shell::print_ansi_stderr(format!("{}\n\n", error.trim_end()).as_bytes())?;
     }
 
+    Ok(())
+}
+
+fn revert_units(active_units: &IndexMap<UnitId, ActiveState>) -> CargoResult<()> {
+    for (file, original) in active_units
+        .values()
+        .flat_map(|state| state.snapshots.iter())
+    {
+        paths::write(file, &original.original_source)?;
+    }
     Ok(())
 }
 
