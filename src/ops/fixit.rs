@@ -151,56 +151,11 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> Ca
     let mut claimed_files: HashMap<same_file::Handle, UnitId> = HashMap::new();
     loop {
         trace!("check ({active_units:?})");
-        let mut check = Check::run(args, lint_cap)?;
-        let mut messages = Vec::new();
-        {
-            let mut errors = IndexMap::new();
-            for message in check.output() {
-                if first {
-                    match &message {
-                        CheckOutput::Message(Message {
-                            build_unit,
-                            message: MessageDiagnostic { diagnostic, .. },
-                        }) => {
-                            let package_id = &build_unit.package_id;
-                            let unit_id = UnitId::from_message(build_unit);
-                            if !is_local(package_id) || !plan.dependencies.contains_key(&unit_id) {
-                                if let Some(rendered) = diagnostic.rendered.clone() {
-                                    let errors =
-                                        errors.entry(unit_id).or_insert_with(IndexSet::new);
-                                    errors.insert(rendered);
-                                }
-                            }
-                        }
-                        CheckOutput::Artifact(a) => {
-                            let package_id = &a.build_unit.package_id;
-                            let unit_id = UnitId::from_message(&a.build_unit);
-                            if !is_local(package_id) || !plan.dependencies.contains_key(&unit_id) {
-                                for error in errors.get(&unit_id).into_iter().flatten() {
-                                    shell::print_ansi_stderr(
-                                        format!("{}\n\n", error.trim_end()).as_bytes(),
-                                    )?;
-                                }
-                                if !a.fresh && seen.insert(package_id.to_owned()) {
-                                    shell::status("Checking", format_package_id(package_id)?)?;
-                                }
-                            }
-                        }
-                    }
-                }
-                print_built(args, &message)?;
-                messages.push(message);
-            }
-            first = false;
-        }
-        let (mut diagnostics, mut exit_code) = check.wait()?;
-        if apply_lint_cap(&messages, exit_code, &mut lint_cap) {
-            let results = Check::run(args, lint_cap)?.collect(args)?;
-            messages = results.messages;
-            diagnostics = results.diagnostics;
-            exit_code = results.exit_code;
-        }
-        messages.sort_unstable_by_key(|m| m.build_unit().cloned());
+        let CheckResults {
+            messages,
+            diagnostics,
+            exit_code,
+        } = run_check(args, &mut lint_cap, &plan, &mut seen, &mut first)?;
 
         if messages.is_empty() && exit_code != Some(0) {
             shell::print_ansi_stderr(&diagnostics)?;
@@ -502,6 +457,70 @@ struct CheckResults {
     messages: Vec<CheckOutput>,
     diagnostics: Vec<u8>,
     exit_code: Option<i32>,
+}
+
+fn run_check(
+    args: &FixitArgs,
+    lint_cap: &mut bool,
+    plan: &UnitGraph,
+    seen: &mut BTreeSet<String>,
+    first: &mut bool,
+) -> CargoResult<CheckResults> {
+    let mut check = Check::run(args, *lint_cap)?;
+    let mut messages = Vec::new();
+    let mut errors = BuildUnitErrors::new();
+    for message in check.output() {
+        if *first {
+            match &message {
+                CheckOutput::Message(Message {
+                    build_unit,
+                    message: MessageDiagnostic { diagnostic, .. },
+                }) => {
+                    let package_id = &build_unit.package_id;
+                    let unit_id = UnitId::from_message(build_unit);
+                    if !is_local(package_id) || !plan.dependencies.contains_key(&unit_id) {
+                        if let Some(rendered) = diagnostic.rendered.clone() {
+                            let errors = errors.entry(unit_id).or_default();
+                            errors.insert(rendered);
+                        }
+                    }
+                }
+                CheckOutput::Artifact(a) => {
+                    let package_id = &a.build_unit.package_id;
+                    let unit_id = UnitId::from_message(&a.build_unit);
+                    if !is_local(package_id) || !plan.dependencies.contains_key(&unit_id) {
+                        for error in errors.get(&unit_id).into_iter().flatten() {
+                            shell::print_ansi_stderr(
+                                format!("{}\n\n", error.trim_end()).as_bytes(),
+                            )?;
+                        }
+                        if !a.fresh && seen.insert(package_id.to_owned()) {
+                            shell::status("Checking", format_package_id(package_id)?)?;
+                        }
+                    }
+                }
+            }
+        }
+        print_built(args, &message)?;
+        messages.push(message);
+    }
+    *first = false;
+    let (mut diagnostics, mut exit_code) = check.wait()?;
+    if apply_lint_cap(&messages, exit_code, lint_cap) {
+        let mut check = Check::run(args, *lint_cap)?;
+        messages.clear();
+        for message in check.output() {
+            print_built(args, &message)?;
+            messages.push(message);
+        }
+        (diagnostics, exit_code) = check.wait()?;
+    }
+    messages.sort_unstable_by_key(|m| m.build_unit().cloned());
+    Ok(CheckResults {
+        messages,
+        diagnostics,
+        exit_code,
+    })
 }
 
 struct Check {
