@@ -195,13 +195,10 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> Ca
         }
         let (mut diagnostics, mut exit_code) = check.wait()?;
         if apply_lint_cap(&messages, exit_code, &mut lint_cap) {
-            let mut check = Check::run(args, lint_cap)?;
-            messages.clear();
-            for message in check.output() {
-                print_built(args, &message)?;
-                messages.push(message);
-            }
-            (diagnostics, exit_code) = check.wait()?;
+            let results = Check::run(args, lint_cap)?.collect(args)?;
+            messages = results.messages;
+            diagnostics = results.diagnostics;
+            exit_code = results.exit_code;
         }
         messages.sort_unstable_by_key(|m| m.build_unit().cloned());
 
@@ -246,13 +243,7 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> Ca
                     out.push_str(&format!("{}\n\n", e.trim_end()));
                 }
 
-                let mut check = Check::run(args, lint_cap)?;
-                let mut messages = Vec::new();
-                for message in check.output() {
-                    print_built(args, &message)?;
-                    messages.push(message);
-                }
-                let _ = check.wait()?;
+                let messages = Check::run(args, lint_cap)?.collect(args)?.messages;
                 let mut errors = messages
                     .into_iter()
                     .filter_map(|e| match e {
@@ -506,6 +497,13 @@ fn revert_units(active_units: &IndexMap<UnitId, ActiveState>) -> CargoResult<()>
     Ok(())
 }
 
+#[derive(Debug)]
+struct CheckResults {
+    messages: Vec<CheckOutput>,
+    diagnostics: Vec<u8>,
+    exit_code: Option<i32>,
+}
+
 struct Check {
     child: Child,
     diagnostics: JoinHandle<std::io::Result<Vec<u8>>>,
@@ -538,6 +536,20 @@ impl Check {
             .lines()
             .map_while(|line| line.ok())
             .filter_map(|line| serde_json::from_str(&line).ok())
+    }
+
+    fn collect(mut self, args: &FixitArgs) -> CargoResult<CheckResults> {
+        let mut messages = Vec::new();
+        for message in self.output() {
+            print_built(args, &message)?;
+            messages.push(message);
+        }
+        let (diagnostics, exit_code) = self.wait()?;
+        Ok(CheckResults {
+            messages,
+            diagnostics,
+            exit_code,
+        })
     }
 
     fn wait(self) -> CargoResult<(Vec<u8>, Option<i32>)> {
