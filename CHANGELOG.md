@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+### Performance
+
+- Made `-Zbatch=try-all` the default, assuming best case full-parallel fix
+
+### Features
+
+- Added `--Zbatch` for testing and debugging of batched-fix behavior
+
+### Compatibility
+
+- Replaced `--Zdangerous-parallel-fixes` with `--Zbatch=all-dangerous`
+
 ## [0.1.16] - 2026-09-19
 
 ### Fixes
