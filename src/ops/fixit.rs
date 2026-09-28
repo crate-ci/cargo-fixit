@@ -128,13 +128,14 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
 }
 
 fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> CargoResult<()> {
+    let batch = args.batch.unwrap_or_default();
     let max_iterations: usize = env::var("CARGO_FIX_MAX_RETRIES")
         .ok()
         .and_then(|i| i.parse().ok())
         .unwrap_or(4);
     let package_metadata = package_metadata(&args.check_flags)?;
     let primary_packages = PrimaryPackages::from_metadata(&package_metadata, &args.check_flags)?;
-    let mut plan = match args.batch.unwrap_or_default() {
+    let mut plan = match batch {
         BatchStrategy::DependencyOrdered => UnitGraph::new(&package_metadata),
         BatchStrategy::One => {
             let mut graph = UnitGraph::new(&package_metadata);
