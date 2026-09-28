@@ -90,8 +90,8 @@ impl FixitArgs {
 #[derive(Debug, Copy, Clone, Default, clap::ValueEnum)]
 enum BatchStrategy {
     One,
-    #[default]
     DependencyOrdered,
+    #[default]
     TryAll,
     AllDangerous,
 }

@@ -205,10 +205,10 @@ fn select_path_dep() {
     p.cargo_("fix --allow-no-vcs -p foo -p bar")
         .with_stdout_data("")
         .with_stderr_data(str![[r#"
-[CHECKING] bar v0.1.0
-[FIXED] bar/src/lib.rs (1 fix)
 [CHECKING] foo v0.1.0
+[CHECKING] bar v0.1.0
 [FIXED] src/lib.rs (1 fix)
+[FIXED] bar/src/lib.rs (1 fix)
 
 "#]])
         .run();
@@ -288,6 +288,9 @@ resolver = '2'
         .with_stderr_data(str![[r#"
 [CHECKING] a v0.1.0
 [CHECKING] b v0.1.0
+[FIXED] a/src/main.rs (1 fix)
+[FIXED] a/build.rs (1 fix)
+[FIXED] a/src/lib.rs (1 fix)
 [WARNING] variable does not need to be mutable
  --> b/build.rs:1:16
   |
@@ -308,9 +311,6 @@ resolver = '2'
   |
   = [NOTE] `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
 
-[FIXED] a/build.rs (1 fix)
-[FIXED] a/src/lib.rs (1 fix)
-[FIXED] a/src/main.rs (1 fix)
 
 "#]])
         .run();
@@ -329,6 +329,9 @@ resolver = '2'
         .with_stderr_data(str![[r#"
 [CHECKING] a v0.1.0
 [CHECKING] b v0.1.0
+[FIXED] a/src/main.rs (1 fix)
+[FIXED] a/build.rs (1 fix)
+[FIXED] a/src/lib.rs (1 fix)
 [WARNING] variable does not need to be mutable
  --> b/build.rs:1:16
   |
@@ -349,9 +352,6 @@ resolver = '2'
   |
   = [NOTE] `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
 
-[FIXED] a/build.rs (1 fix)
-[FIXED] a/src/lib.rs (1 fix)
-[FIXED] a/src/main.rs (1 fix)
 
 "#]])
         .run();
@@ -370,6 +370,9 @@ resolver = '2'
         .with_stderr_data(str![[r#"
 [CHECKING] a v0.1.0
 [CHECKING] b v0.1.0
+[FIXED] a/src/main.rs (1 fix)
+[FIXED] a/build.rs (1 fix)
+[FIXED] a/src/lib.rs (1 fix)
 [WARNING] variable does not need to be mutable
  --> b/build.rs:1:16
   |
@@ -390,9 +393,6 @@ resolver = '2'
   |
   = [NOTE] `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
 
-[FIXED] a/build.rs (1 fix)
-[FIXED] a/src/lib.rs (1 fix)
-[FIXED] a/src/main.rs (1 fix)
 
 "#]])
         .run();
@@ -413,11 +413,11 @@ resolver = '2'
 [CHECKING] b v0.1.0
 [CHECKING] c v0.1.0
 [FIXED] a/build.rs (1 fix)
-[FIXED] b/build.rs (1 fix)
-[FIXED] c/build.rs (1 fix)
-[FIXED] b/src/lib.rs (1 fix)
-[FIXED] c/src/lib.rs (1 fix)
 [FIXED] a/src/lib.rs (1 fix)
+[FIXED] b/build.rs (1 fix)
+[FIXED] b/src/lib.rs (1 fix)
+[FIXED] c/build.rs (1 fix)
+[FIXED] c/src/lib.rs (1 fix)
 
 "#]])
         .run();
@@ -437,15 +437,15 @@ resolver = '2'
 [CHECKING] a v0.1.0
 [CHECKING] b v0.1.0
 [CHECKING] c v0.1.0
+[FIXED] a/src/main.rs (1 fix)
 [FIXED] a/build.rs (1 fix)
-[FIXED] b/build.rs (1 fix)
-[FIXED] c/build.rs (1 fix)
-[FIXED] b/src/lib.rs (1 fix)
-[FIXED] c/src/lib.rs (1 fix)
 [FIXED] a/src/lib.rs (1 fix)
 [FIXED] b/src/main.rs (1 fix)
+[FIXED] b/build.rs (1 fix)
+[FIXED] b/src/lib.rs (1 fix)
 [FIXED] c/src/main.rs (1 fix)
-[FIXED] a/src/main.rs (1 fix)
+[FIXED] c/build.rs (1 fix)
+[FIXED] c/src/lib.rs (1 fix)
 
 "#]])
         .run();
@@ -464,6 +464,9 @@ resolver = '2'
         .with_stderr_data(str![[r#"
 [CHECKING] a v0.1.0
 [CHECKING] b v0.1.0
+[FIXED] a/src/main.rs (1 fix)
+[FIXED] a/build.rs (1 fix)
+[FIXED] a/src/lib.rs (1 fix)
 [WARNING] variable does not need to be mutable
  --> b/build.rs:1:16
   |
@@ -484,9 +487,6 @@ resolver = '2'
   |
   = [NOTE] `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
 
-[FIXED] a/build.rs (1 fix)
-[FIXED] a/src/lib.rs (1 fix)
-[FIXED] a/src/main.rs (1 fix)
 
 "#]])
         .run();
@@ -505,6 +505,9 @@ resolver = '2'
         .with_stderr_data(str![[r#"
 [CHECKING] a v0.1.0
 [CHECKING] b v0.1.0
+[FIXED] a/src/main.rs (1 fix)
+[FIXED] a/build.rs (1 fix)
+[FIXED] a/src/lib.rs (1 fix)
 [WARNING] variable does not need to be mutable
  --> b/build.rs:1:16
   |
@@ -525,9 +528,6 @@ resolver = '2'
   |
   = [NOTE] `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
 
-[FIXED] a/build.rs (1 fix)
-[FIXED] a/src/lib.rs (1 fix)
-[FIXED] a/src/main.rs (1 fix)
 
 "#]])
         .run();
@@ -581,6 +581,9 @@ dep = { path = '../dep' }
         .with_stderr_data(str![[r#"
 [CHECKING] app v0.1.0
 [CHECKING] dep v0.1.0
+[FIXED] app/tests/selected.rs (1 fix)
+[FIXED] app/build.rs (1 fix)
+[FIXED] app/src/lib.rs (1 fix)
 [WARNING] variable does not need to be mutable
  --> dep/build.rs:1:17
   |
@@ -601,9 +604,6 @@ dep = { path = '../dep' }
   |
   = [NOTE] `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
 
-[FIXED] app/build.rs (1 fix)
-[FIXED] app/src/lib.rs (1 fix)
-[FIXED] app/tests/selected.rs (1 fix)
 
 "#]])
         .run();
@@ -622,6 +622,8 @@ resolver = '2'
         .with_stderr_data(str![[r#"
 [CHECKING] a v0.1.0
 [CHECKING] b v0.1.0
+[FIXED] a/build.rs (1 fix)
+[FIXED] a/src/lib.rs (1 fix)
 [WARNING] variable does not need to be mutable
  --> b/build.rs:1:16
   |
@@ -642,8 +644,6 @@ resolver = '2'
   |
   = [NOTE] `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
 
-[FIXED] a/build.rs (1 fix)
-[FIXED] a/src/lib.rs (1 fix)
 
 "#]])
         .run();
@@ -662,6 +662,9 @@ resolver = '2'
         .with_stderr_data(str![[r#"
 [CHECKING] a v0.1.0
 [CHECKING] b v0.1.0
+[FIXED] a/src/main.rs (1 fix)
+[FIXED] a/build.rs (1 fix)
+[FIXED] a/src/lib.rs (1 fix)
 [WARNING] variable does not need to be mutable
  --> b/build.rs:1:16
   |
@@ -682,9 +685,6 @@ resolver = '2'
   |
   = [NOTE] `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
 
-[FIXED] a/build.rs (1 fix)
-[FIXED] a/src/lib.rs (1 fix)
-[FIXED] a/src/main.rs (1 fix)
 
 "#]])
         .run();
@@ -730,9 +730,9 @@ resolver = '2'
     p.cargo_("fix -p a --allow-no-vcs")
         .with_stderr_data(str![[r#"
 [CHECKING] a v0.1.0
+[FIXED] a/src/main.rs (1 fix)
 [FIXED] a/build.rs (1 fix)
 [FIXED] a/src/lib.rs (1 fix)
-[FIXED] a/src/main.rs (1 fix)
 
 "#]])
         .run();
@@ -1031,8 +1031,8 @@ fn upgrade_extern_crate() {
     p.cargo_("fix --allow-no-vcs")
         .env("__CARGO_FIX_YOLO", "1")
         .with_stderr_data(str![[r#"
-[CHECKING] bar v0.1.0
 [CHECKING] foo v0.1.0
+[CHECKING] bar v0.1.0
 [FIXED] src/lib.rs (1 fix)
 
 "#]])
@@ -2028,8 +2028,8 @@ fn doesnt_rebuild_dependencies() {
         .env("__CARGO_FIX_YOLO", "1")
         .with_stdout_data("")
         .with_stderr_data(str![[r#"
-[CHECKING] bar v0.1.0
 [CHECKING] foo v0.1.0
+[CHECKING] bar v0.1.0
 
 "#]])
         .run();
@@ -2563,6 +2563,7 @@ fn abnormal_exit() {
         .build();
 
     p.cargo_("fix --lib --allow-no-vcs")
+        .arg("--Zbatch=dependency-ordered")
         .env(
             "ONCE_PATH",
             paths::root().join("proc-macro-run-once").to_str().unwrap(),

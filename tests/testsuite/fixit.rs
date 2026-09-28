@@ -212,20 +212,20 @@ fn print_errors_after_fixed() {
     p.cargo_("fixit --allow-no-vcs")
         .with_status(0)
         .with_stderr_data(str![[r#"
+[CHECKING] a v0.1.0
 [CHECKING] b v0.1.0
-[FIXED] b/src/lib.rs (1 fix)
+[FIXED] a/src/lib.rs (1 fix)
 [WARNING] function `bar` is never used
- --> b/src/lib.rs:1:5
+ --> a/src/lib.rs:1:5
   |
 1 |  fn bar() {}
   |     ^^^
   |
   = [NOTE] `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
 
-[CHECKING] a v0.1.0
-[FIXED] a/src/lib.rs (1 fix)
+[FIXED] b/src/lib.rs (1 fix)
 [WARNING] function `bar` is never used
- --> a/src/lib.rs:1:5
+ --> b/src/lib.rs:1:5
   |
 1 |  fn bar() {}
   |     ^^^
@@ -466,15 +466,20 @@ path = \"src/main.rs\"
 
 #[cargo_test]
 fn fix_order_build_unit_batch_all() {
-    fix_order_build_unit_batch_all_with("all-dangerous");
+    fix_order_build_unit_batch_all_with(Some("all-dangerous"));
 }
 
 #[cargo_test]
 fn fix_order_build_unit_batch_try_all() {
-    fix_order_build_unit_batch_all_with("try-all");
+    fix_order_build_unit_batch_all_with(Some("try-all"));
 }
 
-fn fix_order_build_unit_batch_all_with(batch: &str) {
+#[cargo_test]
+fn fix_order_build_unit_batch_default() {
+    fix_order_build_unit_batch_all_with(None);
+}
+
+fn fix_order_build_unit_batch_all_with(batch: Option<&str>) {
     let p = project()
         .file(
             "Cargo.toml",
@@ -492,8 +497,11 @@ path = \"src/main.rs\"
         .file("src/main.rs", "fn main(){ let mut a = 1; let _ = a; }")
         .build();
 
-    p.cargo_("fixit --allow-no-vcs --verbose")
-        .arg(format!("--Zbatch={batch}"))
+    let mut command = p.cargo_("fixit --allow-no-vcs --verbose");
+    if let Some(batch) = batch {
+        command.arg(format!("--Zbatch={batch}"));
+    }
+    command
         .with_stderr_data(
             str![[r#"
      Checked foo v0.1.0 - build-script-build (custom-build)

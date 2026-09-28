@@ -409,11 +409,11 @@ fn try_all_reverts_when_suggestions_remain() {
 }
 
 #[cargo_test]
-fn try_all_starts_with_fresh_iterations() {
+fn default_batch_starts_with_fresh_iterations() {
     expect_fix_runs_rustc_n_times(
         &[Step::OneFix, Step::OneFix, Step::SuccessNoOutput],
         |execs| {
-            execs.arg("--Zbatch=try-all").env("CARGO_FIX_MAX_RETRIES", "1");
+            execs.env("CARGO_FIX_MAX_RETRIES", "1");
         },
         str![[r#"
 [CHECKING] foo v0.0.1
@@ -513,7 +513,9 @@ fn fix_overlapping_max() {
             Step::TwoFixOverlapping,
             Step::TwoFixOverlapping,
         ],
-        |_execs| {},
+        |execs| {
+            execs.arg("--Zbatch=dependency-ordered");
+        },
         str![[r#"
 [CHECKING] foo v0.0.1
 [FIXED] src/lib.rs (4 fixes)
@@ -534,7 +536,9 @@ fn fix_verification_failed() {
     // This should cause `cargo fix` to back out the changes.
     expect_fix_runs_rustc_n_times(
         &[Step::OneFix, Step::Error],
-        |_execs| {},
+        |execs| {
+            execs.arg("--Zbatch=dependency-ordered");
+        },
         str![[r#"
 [CHECKING] foo v0.0.1
 [NOTE] reverting `src/lib.rs` to its original state
@@ -574,6 +578,7 @@ fn fix_verification_failed_clippy() {
     expect_fix_runs_rustc_n_times(
         &[Step::OneFix, Step::Error],
         |execs| {
+            execs.arg("--Zbatch=dependency-ordered");
             execs.env("RUSTC_WORKSPACE_WRAPPER", wrapped_clippy_driver());
         },
         str![[r#"
