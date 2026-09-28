@@ -117,10 +117,10 @@ fn expect_fix_runs_rustc_n_times(
     extra_execs(&mut execs);
     execs.run();
     let lib_rs = p.read_file("src/lib.rs");
+    assert_eq!(expected_lib_rs, lib_rs);
 
     // `rustc-fix-shim-count` is created only if `execs` runs successfully
     if expected_status == 0 {
-        assert_eq!(expected_lib_rs, lib_rs);
         let count: usize = p.read_file("rustc-fix-shim-count").parse().unwrap();
         assert_eq!(sequence.len(), count);
     }
@@ -332,6 +332,152 @@ fn fix_one_suggestion() {
         str![[r#"
 [CHECKING] foo v0.0.1
 [FIXED] src/lib.rs (1 fix)
+
+"#]],
+        "// fix-count 1",
+        0,
+    );
+}
+
+#[cargo_test]
+fn try_all_no_suggestions() {
+    expect_fix_runs_rustc_n_times(
+        &[Step::SuccessNoOutput],
+        |execs| {
+            execs.arg("--Zbatch=try-all");
+        },
+        str![[r#"
+[CHECKING] foo v0.0.1
+
+"#]],
+        "// fix-count 0",
+        0,
+    );
+}
+
+#[cargo_test]
+fn try_all_falls_back_after_verification_failure() {
+    expect_fix_runs_rustc_n_times(
+        &[Step::OneFix, Step::Error, Step::SuccessNoOutput],
+        |execs| {
+            execs.arg("--Zbatch=try-all").env("CARGO_FIX_MAX_RETRIES", "1");
+        },
+        str![[r#"
+[CHECKING] foo v0.0.1
+[FIXED] src/lib.rs (1 fix)
+
+"#]],
+        "// fix-count 1",
+        0,
+    );
+}
+
+#[cargo_test]
+fn try_all_reports_remaining_unfixable_diagnostics() {
+    expect_fix_runs_rustc_n_times(
+        &[Step::OneFix, Step::Warning],
+        |execs| {
+            execs.arg("--Zbatch=try-all");
+        },
+        str![[r#"
+[CHECKING] foo v0.0.1
+[FIXED] src/lib.rs (1 fix)
+rustc fix shim warning count=2
+
+
+"#]],
+        "// fix-count 1",
+        0,
+    );
+}
+
+#[cargo_test]
+fn try_all_reverts_when_suggestions_remain() {
+    expect_fix_runs_rustc_n_times(
+        &[Step::OneFix, Step::OneFix, Step::SuccessNoOutput],
+        |execs| {
+            execs.arg("--Zbatch=try-all");
+        },
+        str![[r#"
+[CHECKING] foo v0.0.1
+[FIXED] src/lib.rs (1 fix)
+
+"#]],
+        "// fix-count 1",
+        0,
+    );
+}
+
+#[cargo_test]
+fn try_all_starts_with_fresh_iterations() {
+    expect_fix_runs_rustc_n_times(
+        &[Step::OneFix, Step::OneFix, Step::SuccessNoOutput],
+        |execs| {
+            execs.arg("--Zbatch=try-all").env("CARGO_FIX_MAX_RETRIES", "1");
+        },
+        str![[r#"
+[CHECKING] foo v0.0.1
+[FIXED] src/lib.rs (1 fix)
+
+"#]],
+        "// fix-count 1",
+        0,
+    );
+}
+
+#[cargo_test]
+fn try_all_reverts_all_fixes_when_fallback_fails() {
+    expect_fix_runs_rustc_n_times(
+        &[Step::OneFix, Step::OneFix, Step::Error, Step::Warning],
+        |execs| {
+            execs.arg("--Zbatch=try-all");
+        },
+        str![[r#"
+[CHECKING] foo v0.0.1
+[NOTE] reverting `src/lib.rs` to its original state
+[WARNING] failed to automatically apply fixes suggested by rustc
+
+after fixes were automatically applied the compiler reported errors within these files:
+
+  * src/lib.rs
+
+This likely indicates a bug in either rustc or cargo itself,
+and we would appreciate a bug report! You're likely to see
+a number of compiler warnings after this message which cargo
+attempted to fix but failed. If you could open an issue at
+https://github.com/rust-lang/rust/issues
+quoting the full output of this command we'd be very appreciative!
+Note that you may be able to make some more progress in the near-term
+fixing code with the `--broken-code` flag
+
+The errors reported are:
+rustc fix shim error count=3
+
+The original errors are:
+rustc fix shim warning count=4
+
+
+[NOTE] try using `--broken-code` to fix errors
+[ERROR] could not compile
+
+"#]],
+        "// fix-count 0",
+        101,
+    );
+}
+
+#[cargo_test]
+fn try_all_broken_code_uses_ordered_fixes() {
+    expect_fix_runs_rustc_n_times(
+        &[Step::OneFixError, Step::Error],
+        |execs| {
+            execs.arg("--Zbatch=try-all").arg("--broken-code");
+        },
+        str![[r#"
+[CHECKING] foo v0.0.1
+[FIXED] src/lib.rs (1 fix)
+rustc fix shim error count=2
+
 
 "#]],
         "// fix-count 1",

@@ -92,6 +92,7 @@ enum BatchStrategy {
     One,
     #[default]
     DependencyOrdered,
+    TryAll,
     AllDangerous,
 }
 
@@ -136,7 +137,9 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> Ca
     let package_metadata = package_metadata(&args.check_flags)?;
     let primary_packages = PrimaryPackages::from_metadata(&package_metadata, &args.check_flags)?;
     let mut plan = match batch {
-        BatchStrategy::DependencyOrdered => UnitGraph::new(&package_metadata),
+        BatchStrategy::DependencyOrdered | BatchStrategy::TryAll => {
+            UnitGraph::new(&package_metadata)
+        }
         BatchStrategy::One => {
             let mut graph = UnitGraph::new(&package_metadata);
             graph.make_linear();
@@ -153,6 +156,68 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> Ca
 
     trace!("check ({active_units:?})");
     let mut check_results = run_check(args, &mut lint_cap, &plan, &mut seen, &mut first)?;
+
+    if matches!(batch, BatchStrategy::TryAll) && check_results.exit_code == Some(0) {
+        let mut plan = UnitGraph::flat(&package_metadata);
+        let mut active_units = IndexMap::new();
+        let mut claimed_files = HashMap::new();
+        let verified = (|| -> CargoResult<bool> {
+            let (_, suggestions) = collect_diagnostics(
+                check_results.messages.iter(),
+                &plan.finished,
+                &primary_packages,
+                &active_units,
+                max_iterations,
+            );
+            let observed_packages: HashSet<String> = check_results
+                .messages
+                .iter()
+                .filter_map(CheckOutput::build_unit)
+                .map(|unit| unit.package_id.clone())
+                .collect();
+            for unit_id in plan.take_ready() {
+                let package_id = unit_id.package_id();
+                if observed_packages.contains(package_id) && seen.insert(package_id.to_owned()) {
+                    shell::status("Checking", format_package_id(package_id)?)?;
+                }
+                active_units.insert(unit_id, Default::default());
+            }
+            if !fix_batch(&suggestions, &mut active_units, &mut claimed_files)? {
+                return Ok(false);
+            }
+            let verified = run_check(args, &mut lint_cap, &plan, &mut seen, &mut first)?;
+            if verified.exit_code != Some(0) {
+                return Ok(false);
+            }
+            let (errors, suggestions) = collect_diagnostics(
+                verified.messages.iter(),
+                &plan.finished,
+                &primary_packages,
+                &IndexMap::new(),
+                max_iterations,
+            );
+            if !suggestions.is_empty() {
+                return Ok(false);
+            }
+            for unit_id in active_units.keys() {
+                finish_unit(unit_id, &active_units, errors.get(unit_id))?;
+            }
+            Ok(true)
+        })();
+        match verified {
+            Ok(true) => {
+                return Ok(());
+            }
+            Ok(false) => {
+                trace!("try-all verification failed, falling back to dependency ordering");
+                revert_units(&active_units)?;
+            }
+            Err(error) => {
+                revert_units(&active_units)?;
+                return Err(error);
+            }
+        }
+    }
 
     loop {
         let CheckResults {
@@ -775,11 +840,12 @@ fn fix_batch(
     suggestions: &BuildUnitSuggestions,
     active_units: &mut IndexMap<UnitId, ActiveState>,
     claimed_files: &mut HashMap<same_file::Handle, UnitId>,
-) -> CargoResult<()> {
+) -> CargoResult<bool> {
+    let mut made_changes = false;
     'units: for (unit_id, state) in active_units.iter_mut() {
-        let unit_suggestions = suggestions
-            .get(unit_id)
-            .expect("finished all active_units without suggestions");
+        let Some(unit_suggestions) = suggestions.get(unit_id) else {
+            continue;
+        };
         for path in state.snapshots.keys().chain(unit_suggestions.keys()) {
             let Ok(handle) = same_file::Handle::from_path(path) else {
                 continue;
@@ -798,9 +864,9 @@ fn fix_batch(
         }
         trace!("fixing `{unit_id:?}` {state:?}");
         state.iterations += 1;
-        let _made_changes = fix_suggestions(unit_suggestions, state)?;
+        made_changes |= fix_suggestions(unit_suggestions, state)?;
     }
-    Ok(())
+    Ok(made_changes)
 }
 
 #[tracing::instrument(skip_all)]

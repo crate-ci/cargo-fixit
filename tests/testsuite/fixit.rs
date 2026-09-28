@@ -326,6 +326,17 @@ pub fn lib() { let mut value = 1; let _ = value; }
 #[cfg(unix)]
 #[cargo_test]
 fn restores_all_files_when_batched_write_fails() {
+    restores_all_files_when_batched_write_fails_with("dependency-ordered");
+}
+
+#[cfg(unix)]
+#[cargo_test]
+fn try_all_restores_all_files_when_batched_write_fails() {
+    restores_all_files_when_batched_write_fails_with("try-all");
+}
+
+#[cfg(unix)]
+fn restores_all_files_when_batched_write_fails_with(batch: &str) {
     use std::os::unix::fs::PermissionsExt;
 
     let original_a = "pub fn a() -> i32 { let mut value = 1; value }
@@ -350,6 +361,7 @@ resolver = "2"
     std::fs::set_permissions(&unwritable, std::fs::Permissions::from_mode(0o444)).unwrap();
 
     p.cargo_("fixit --workspace --allow-no-vcs")
+        .arg(format!("--Zbatch={batch}"))
         .with_status(101)
         .with_stderr_data(str![[r#"
 [CHECKING] a v0.1.0
@@ -454,6 +466,15 @@ path = \"src/main.rs\"
 
 #[cargo_test]
 fn fix_order_build_unit_batch_all() {
+    fix_order_build_unit_batch_all_with("all-dangerous");
+}
+
+#[cargo_test]
+fn fix_order_build_unit_batch_try_all() {
+    fix_order_build_unit_batch_all_with("try-all");
+}
+
+fn fix_order_build_unit_batch_all_with(batch: &str) {
     let p = project()
         .file(
             "Cargo.toml",
@@ -472,7 +493,7 @@ path = \"src/main.rs\"
         .build();
 
     p.cargo_("fixit --allow-no-vcs --verbose")
-        .arg("--Zbatch=all-dangerous")
+        .arg(format!("--Zbatch={batch}"))
         .with_stderr_data(
             str![[r#"
      Checked foo v0.1.0 - build-script-build (custom-build)
@@ -490,6 +511,10 @@ path = \"src/main.rs\"
             .unordered(),
         )
         .run();
+
+    assert_eq!(p.read_file("build.rs"), "fn main(){ let a = 1; let _ = a; }");
+    assert_eq!(p.read_file("src/lib.rs"), "fn _a(){ let a = 1; let _ = a; }");
+    assert_eq!(p.read_file("src/main.rs"), "fn main(){ let a = 1; let _ = a; }");
 }
 
 #[cargo_test]
@@ -1058,6 +1083,7 @@ fn build_script_fixes_refresh_generated_source_before_downstream_fixes() {
     for (name, args) in [
         ("normal", "fixit --allow-no-vcs"),
         ("broken", "fixit --allow-no-vcs --broken-code"),
+        ("try-all", "fixit --allow-no-vcs --Zbatch=try-all"),
     ] {
         let p = project()
             .at(format!("build-script-{name}"))
