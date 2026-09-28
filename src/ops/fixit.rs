@@ -149,13 +149,16 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> Ca
     let mut seen = BTreeSet::new();
     let mut first = true;
     let mut claimed_files: HashMap<same_file::Handle, UnitId> = HashMap::new();
+
+    trace!("check ({active_units:?})");
+    let mut check_results = run_check(args, &mut lint_cap, &plan, &mut seen, &mut first)?;
+
     loop {
-        trace!("check ({active_units:?})");
         let CheckResults {
             messages,
             diagnostics,
             exit_code,
-        } = run_check(args, &mut lint_cap, &plan, &mut seen, &mut first)?;
+        } = check_results;
 
         if messages.is_empty() && exit_code != Some(0) {
             shell::print_ansi_stderr(&diagnostics)?;
@@ -271,6 +274,9 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> Ca
         }
 
         fix_batch(&suggestions, active_units, &mut claimed_files)?;
+
+        trace!("check ({active_units:?})");
+        check_results = run_check(args, &mut lint_cap, &plan, &mut seen, &mut first)?;
     }
     Ok(())
 }
