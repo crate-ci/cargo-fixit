@@ -212,20 +212,20 @@ fn print_errors_after_fixed() {
     p.cargo_("fixit --allow-no-vcs")
         .with_status(0)
         .with_stderr_data(str![[r#"
+[CHECKING] a v0.1.0
 [CHECKING] b v0.1.0
-[FIXED] b/src/lib.rs (1 fix)
+[FIXED] a/src/lib.rs (1 fix)
 [WARNING] function `bar` is never used
- --> b/src/lib.rs:1:5
+ --> a/src/lib.rs:1:5
   |
 1 |  fn bar() {}
   |     ^^^
   |
   = [NOTE] `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
 
-[CHECKING] a v0.1.0
-[FIXED] a/src/lib.rs (1 fix)
+[FIXED] b/src/lib.rs (1 fix)
 [WARNING] function `bar` is never used
- --> a/src/lib.rs:1:5
+ --> b/src/lib.rs:1:5
   |
 1 |  fn bar() {}
   |     ^^^
@@ -326,6 +326,17 @@ pub fn lib() { let mut value = 1; let _ = value; }
 #[cfg(unix)]
 #[cargo_test]
 fn restores_all_files_when_batched_write_fails() {
+    restores_all_files_when_batched_write_fails_with("dependency-ordered");
+}
+
+#[cfg(unix)]
+#[cargo_test]
+fn try_all_restores_all_files_when_batched_write_fails() {
+    restores_all_files_when_batched_write_fails_with("try-all");
+}
+
+#[cfg(unix)]
+fn restores_all_files_when_batched_write_fails_with(batch: &str) {
     use std::os::unix::fs::PermissionsExt;
 
     let original_a = "pub fn a() -> i32 { let mut value = 1; value }
@@ -350,6 +361,7 @@ resolver = "2"
     std::fs::set_permissions(&unwritable, std::fs::Permissions::from_mode(0o444)).unwrap();
 
     p.cargo_("fixit --workspace --allow-no-vcs")
+        .arg(format!("--Zbatch={batch}"))
         .with_status(101)
         .with_stderr_data(str![[r#"
 [CHECKING] a v0.1.0
@@ -384,6 +396,7 @@ path = \"src/main.rs\"
         .build();
 
     p.cargo_("fixit --allow-no-vcs --verbose")
+        .arg("--Zbatch=dependency-ordered")
         .with_stderr_data(
             str![[r#"
      Checked foo v0.1.0 - app (bin)
@@ -408,6 +421,111 @@ path = \"src/main.rs\"
 }
 
 #[cargo_test]
+fn fix_order_build_unit_batch_one() {
+    let p = project()
+        .file(
+            "Cargo.toml",
+            &format!(
+                "{}
+[[bin]]
+name = \"app\"
+path = \"src/main.rs\"
+",
+                basic_manifest("foo", "0.1.0")
+            ),
+        )
+        .file("build.rs", "fn main(){ let mut a = 1; let _ = a; }")
+        .file("src/lib.rs", "fn _a(){ let mut a = 1; let _ = a; }")
+        .file("src/main.rs", "fn main(){ let mut a = 1; let _ = a; }")
+        .build();
+
+    p.cargo_("fixit --allow-no-vcs --verbose")
+        .arg("--Zbatch=one")
+        .with_stderr_data(
+            str![[r#"
+     Checked foo v0.1.0 - build-script-build (custom-build)
+     Checked foo v0.1.0 - foo (lib)
+     Checked foo v0.1.0 - app (bin)
+[CHECKING] foo v0.1.0
+     Checked foo v0.1.0 - build-script-build (custom-build)
+     Checked foo v0.1.0 - foo (lib)
+     Checked foo v0.1.0 - app (bin)
+[FIXED] build.rs (1 fix)
+     Checked foo v0.1.0 - foo (lib)
+     Checked foo v0.1.0 - app (bin)
+[FIXED] src/lib.rs (1 fix)
+     Checked foo v0.1.0 - foo (lib)
+     Checked foo v0.1.0 - app (bin)
+[FIXED] src/main.rs (1 fix)
+
+"#]]
+            .unordered(),
+        )
+        .run();
+}
+
+#[cargo_test]
+fn fix_order_build_unit_batch_all() {
+    fix_order_build_unit_batch_all_with(Some("all-dangerous"));
+}
+
+#[cargo_test]
+fn fix_order_build_unit_batch_try_all() {
+    fix_order_build_unit_batch_all_with(Some("try-all"));
+}
+
+#[cargo_test]
+fn fix_order_build_unit_batch_default() {
+    fix_order_build_unit_batch_all_with(None);
+}
+
+fn fix_order_build_unit_batch_all_with(batch: Option<&str>) {
+    let p = project()
+        .file(
+            "Cargo.toml",
+            &format!(
+                "{}
+[[bin]]
+name = \"app\"
+path = \"src/main.rs\"
+",
+                basic_manifest("foo", "0.1.0")
+            ),
+        )
+        .file("build.rs", "fn main(){ let mut a = 1; let _ = a; }")
+        .file("src/lib.rs", "fn _a(){ let mut a = 1; let _ = a; }")
+        .file("src/main.rs", "fn main(){ let mut a = 1; let _ = a; }")
+        .build();
+
+    let mut command = p.cargo_("fixit --allow-no-vcs --verbose");
+    if let Some(batch) = batch {
+        command.arg(format!("--Zbatch={batch}"));
+    }
+    command
+        .with_stderr_data(
+            str![[r#"
+     Checked foo v0.1.0 - build-script-build (custom-build)
+     Checked foo v0.1.0 - foo (lib)
+     Checked foo v0.1.0 - app (bin)
+[CHECKING] foo v0.1.0
+     Checked foo v0.1.0 - build-script-build (custom-build)
+     Checked foo v0.1.0 - foo (lib)
+     Checked foo v0.1.0 - app (bin)
+[FIXED] src/main.rs (1 fix)
+[FIXED] build.rs (1 fix)
+[FIXED] src/lib.rs (1 fix)
+
+"#]]
+            .unordered(),
+        )
+        .run();
+
+    assert_eq!(p.read_file("build.rs"), "fn main(){ let a = 1; let _ = a; }");
+    assert_eq!(p.read_file("src/lib.rs"), "fn _a(){ let a = 1; let _ = a; }");
+    assert_eq!(p.read_file("src/main.rs"), "fn main(){ let a = 1; let _ = a; }");
+}
+
+#[cargo_test]
 fn fix_order_multiple_lib_crate_types() {
     let p = project()
         .file(
@@ -427,6 +545,7 @@ crate-type = ["rlib", "cdylib"]
         .build();
 
     p.cargo_("fixit --allow-no-vcs --verbose")
+        .arg("--Zbatch=dependency-ordered")
         .with_stderr_data(str![[r#"
      Checked foo v0.1.0 - foo (lib)
 [CHECKING] foo v0.1.0
@@ -473,6 +592,7 @@ dep = {{ path = '../dep' }}
         .build();
 
     p.cargo_("fixit --workspace --allow-no-vcs --target host-tuple --verbose")
+        .arg("--Zbatch=dependency-ordered")
         .with_stderr_data(
             str![[r#"
      Checked app v0.1.0 - app (bin)
@@ -575,6 +695,7 @@ fn main(){ let mut a = 1; let _ = a; }
         .build();
 
     p.cargo_("fixit --allow-no-vcs --all-targets --verbose")
+        .arg("--Zbatch=dependency-ordered")
         .with_stderr_data(
             str![[r#"
      Checked foo v0.1.0 - app (bin)
@@ -638,6 +759,7 @@ resolver = "2"
         .build();
 
     p.cargo_("fixit --workspace --allow-no-vcs --verbose")
+        .arg("--Zbatch=dependency-ordered")
         .with_status(0)
         .with_stderr_data(
             str![[r#"
@@ -710,6 +832,7 @@ fn fix_order_serial_packages() {
         .build();
 
     p.cargo_("fixit --workspace --allow-no-vcs --verbose")
+        .arg("--Zbatch=dependency-ordered")
         .with_status(0)
         .with_stderr_data(
             str![[r#"
@@ -766,6 +889,7 @@ resolver = "2"
     std::fs::hard_link(&source, &hardlink).unwrap();
 
     p.cargo_("fixit --workspace --allow-no-vcs --broken-code --verbose")
+        .arg("--Zbatch=dependency-ordered")
         .with_stderr_data(
             str![[r#"
      Checked a v0.1.0 - a (lib)
@@ -846,6 +970,7 @@ a = {{ path = '../a' }}
         .build();
 
     p.cargo_("fixit --workspace --all-targets --allow-no-vcs --verbose")
+        .arg("--Zbatch=dependency-ordered")
         .with_stderr_data(
             str![[r#"
      Checked a v0.1.0 - cycle (test)
@@ -966,6 +1091,7 @@ fn build_script_fixes_refresh_generated_source_before_downstream_fixes() {
     for (name, args) in [
         ("normal", "fixit --allow-no-vcs"),
         ("broken", "fixit --allow-no-vcs --broken-code"),
+        ("try-all", "fixit --allow-no-vcs --Zbatch=try-all"),
     ] {
         let p = project()
             .at(format!("build-script-{name}"))

@@ -50,6 +50,10 @@ pub struct FixitArgs {
     #[arg(long = "Zdangerous-parallel-fixes")]
     dangerous_parallel_fixes: bool,
 
+    /// Selection of fixes to be applied each round
+    #[arg(long = "Zbatch", conflicts_with = "dangerous_parallel_fixes")]
+    batch: Option<BatchStrategy>,
+
     #[command(flatten)]
     color: colorchoice_clap::Color,
 
@@ -64,7 +68,13 @@ pub struct FixitArgs {
 }
 
 impl FixitArgs {
-    pub fn exec(self) -> CargoResult<()> {
+    pub fn exec(mut self) -> CargoResult<()> {
+        if self.dangerous_parallel_fixes {
+            shell::warn(
+                "`--Zdangerous-parallel-fixes` is deprecated, see instead `--Zbatch=all-dangerous`",
+            )?;
+            self.batch = Some(BatchStrategy::AllDangerous);
+        }
         exec(self)
     }
 
@@ -75,6 +85,15 @@ impl FixitArgs {
         command.arg(cmd).args(self.check_flags.to_flags());
         command
     }
+}
+
+#[derive(Debug, Copy, Clone, Default, clap::ValueEnum)]
+enum BatchStrategy {
+    One,
+    DependencyOrdered,
+    #[default]
+    TryAll,
+    AllDangerous,
 }
 
 #[derive(Debug, Default)]
@@ -103,28 +122,30 @@ fn exec(args: FixitArgs) -> CargoResult<()> {
     match fix(&args, &mut active_units) {
         Ok(()) => Ok(()),
         Err(error) => {
-            for (file, original) in active_units
-                .values()
-                .flat_map(|state| state.snapshots.iter())
-            {
-                paths::write(file, &original.original_source)?;
-            }
+            revert_units(&active_units)?;
             Err(error)
         }
     }
 }
 
 fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> CargoResult<()> {
+    let batch = args.batch.unwrap_or_default();
     let max_iterations: usize = env::var("CARGO_FIX_MAX_RETRIES")
         .ok()
         .and_then(|i| i.parse().ok())
         .unwrap_or(4);
     let package_metadata = package_metadata(&args.check_flags)?;
     let primary_packages = PrimaryPackages::from_metadata(&package_metadata, &args.check_flags)?;
-    let mut plan = if args.dangerous_parallel_fixes {
-        UnitGraph::flat(&package_metadata)
-    } else {
-        UnitGraph::new(&package_metadata)
+    let mut plan = match batch {
+        BatchStrategy::DependencyOrdered | BatchStrategy::TryAll => {
+            UnitGraph::new(&package_metadata)
+        }
+        BatchStrategy::One => {
+            let mut graph = UnitGraph::new(&package_metadata);
+            graph.make_linear();
+            graph
+        }
+        BatchStrategy::AllDangerous => UnitGraph::flat(&package_metadata),
     };
     trace!("plan `{plan:#?}`");
 
@@ -132,61 +153,78 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> Ca
     let mut seen = BTreeSet::new();
     let mut first = true;
     let mut claimed_files: HashMap<same_file::Handle, UnitId> = HashMap::new();
-    loop {
-        trace!("check ({active_units:?})");
-        let mut check = Check::run(args, lint_cap)?;
-        let mut messages = Vec::new();
-        {
-            let mut errors = IndexMap::new();
-            for message in check.output() {
-                if first {
-                    match &message {
-                        CheckOutput::Message(Message {
-                            build_unit,
-                            message: MessageDiagnostic { diagnostic, .. },
-                        }) => {
-                            let package_id = &build_unit.package_id;
-                            let unit_id = UnitId::from_message(build_unit);
-                            if !is_local(package_id) || !plan.dependencies.contains_key(&unit_id) {
-                                if let Some(rendered) = diagnostic.rendered.clone() {
-                                    let errors =
-                                        errors.entry(unit_id).or_insert_with(IndexSet::new);
-                                    errors.insert(rendered);
-                                }
-                            }
-                        }
-                        CheckOutput::Artifact(a) => {
-                            let package_id = &a.build_unit.package_id;
-                            let unit_id = UnitId::from_message(&a.build_unit);
-                            if !is_local(package_id) || !plan.dependencies.contains_key(&unit_id) {
-                                for error in errors.get(&unit_id).into_iter().flatten() {
-                                    shell::print_ansi_stderr(
-                                        format!("{}\n\n", error.trim_end()).as_bytes(),
-                                    )?;
-                                }
-                                if !a.fresh && seen.insert(package_id.to_owned()) {
-                                    shell::status("Checking", format_package_id(package_id)?)?;
-                                }
-                            }
-                        }
-                    }
+
+    trace!("check ({active_units:?})");
+    let mut check_results = run_check(args, &mut lint_cap, &plan, &mut seen, &mut first)?;
+
+    if matches!(batch, BatchStrategy::TryAll) && check_results.exit_code == Some(0) {
+        let mut plan = UnitGraph::flat(&package_metadata);
+        let mut active_units = IndexMap::new();
+        let mut claimed_files = HashMap::new();
+        let verified = (|| -> CargoResult<bool> {
+            let (_, suggestions) = collect_diagnostics(
+                check_results.messages.iter(),
+                &plan.finished,
+                &primary_packages,
+                &active_units,
+                max_iterations,
+            );
+            let observed_packages: HashSet<String> = check_results
+                .messages
+                .iter()
+                .filter_map(CheckOutput::build_unit)
+                .map(|unit| unit.package_id.clone())
+                .collect();
+            for unit_id in plan.take_ready() {
+                let package_id = unit_id.package_id();
+                if observed_packages.contains(package_id) && seen.insert(package_id.to_owned()) {
+                    shell::status("Checking", format_package_id(package_id)?)?;
                 }
-                print_built(args, &message)?;
-                messages.push(message);
+                active_units.insert(unit_id, Default::default());
             }
-            first = false;
-        }
-        let (mut diagnostics, mut exit_code) = check.wait()?;
-        if apply_lint_cap(&messages, exit_code, &mut lint_cap) {
-            let mut check = Check::run(args, lint_cap)?;
-            messages.clear();
-            for message in check.output() {
-                print_built(args, &message)?;
-                messages.push(message);
+            if !fix_batch(&suggestions, &mut active_units, &mut claimed_files)? {
+                return Ok(false);
             }
-            (diagnostics, exit_code) = check.wait()?;
+            let verified = run_check(args, &mut lint_cap, &plan, &mut seen, &mut first)?;
+            if verified.exit_code != Some(0) {
+                return Ok(false);
+            }
+            let (errors, suggestions) = collect_diagnostics(
+                verified.messages.iter(),
+                &plan.finished,
+                &primary_packages,
+                &IndexMap::new(),
+                max_iterations,
+            );
+            if !suggestions.is_empty() {
+                return Ok(false);
+            }
+            for unit_id in active_units.keys() {
+                finish_unit(unit_id, &active_units, errors.get(unit_id))?;
+            }
+            Ok(true)
+        })();
+        match verified {
+            Ok(true) => {
+                return Ok(());
+            }
+            Ok(false) => {
+                trace!("try-all verification failed, falling back to dependency ordering");
+                revert_units(&active_units)?;
+            }
+            Err(error) => {
+                revert_units(&active_units)?;
+                return Err(error);
+            }
         }
-        messages.sort_unstable_by_key(|m| m.build_unit().cloned());
+    }
+
+    loop {
+        let CheckResults {
+            messages,
+            diagnostics,
+            exit_code,
+        } = check_results;
 
         if messages.is_empty() && exit_code != Some(0) {
             shell::print_ansi_stderr(&diagnostics)?;
@@ -201,20 +239,14 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> Ca
                     compiler reported errors within these files:\n\n",
                 );
 
-                for (
-                    file,
-                    File {
-                        fixes: _,
-                        original_source,
-                    },
-                ) in active_units
+                for file in active_units
                     .values()
-                    .flat_map(|state| state.snapshots.iter())
+                    .flat_map(|state| state.snapshots.keys())
                 {
                     out.push_str(&format!("  * {file}\n"));
                     shell::note(format!("reverting `{file}` to its original state"))?;
-                    paths::write(file, original_source)?;
                 }
+                revert_units(active_units)?;
                 active_units.clear();
                 out.push('\n');
 
@@ -235,13 +267,7 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> Ca
                     out.push_str(&format!("{}\n\n", e.trim_end()));
                 }
 
-                let mut check = Check::run(args, lint_cap)?;
-                let mut messages = Vec::new();
-                for message in check.output() {
-                    print_built(args, &message)?;
-                    messages.push(message);
-                }
-                let _ = check.wait()?;
+                let messages = Check::run(args, lint_cap)?.collect(args)?.messages;
                 let mut errors = messages
                     .into_iter()
                     .filter_map(|e| match e {
@@ -276,7 +302,7 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> Ca
             .map(|unit| unit.package_id.clone())
             .collect();
         let (mut errors, suggestions) = collect_diagnostics(
-            messages.into_iter(),
+            messages.iter(),
             &plan.finished,
             &primary_packages,
             active_units,
@@ -313,32 +339,10 @@ fn fix(args: &FixitArgs, active_units: &mut IndexMap<UnitId, ActiveState>) -> Ca
             break;
         }
 
-        'units: for (unit_id, state) in active_units.iter_mut() {
-            let unit_suggestions = suggestions
-                .get(unit_id)
-                .expect("finished all active_units without suggestions");
-            for path in state.snapshots.keys().chain(unit_suggestions.keys()) {
-                let Ok(handle) = same_file::Handle::from_path(path) else {
-                    continue;
-                };
-                match claimed_files.entry(handle) {
-                    std::collections::hash_map::Entry::Occupied(entry)
-                        if entry.get() != unit_id =>
-                    {
-                        trace!("deferring `{unit_id:?}` due to contention over {path}");
-                        claimed_files.retain(|_k, v| v != unit_id);
-                        continue 'units;
-                    }
-                    std::collections::hash_map::Entry::Occupied(_) => {}
-                    std::collections::hash_map::Entry::Vacant(entry) => {
-                        entry.insert(unit_id.clone());
-                    }
-                }
-            }
-            trace!("fixing `{unit_id:?}` {state:?}");
-            state.iterations += 1;
-            let _made_changes = fix_suggestions(unit_suggestions, state)?;
-        }
+        fix_batch(&suggestions, active_units, &mut claimed_files)?;
+
+        trace!("check ({active_units:?})");
+        check_results = run_check(args, &mut lint_cap, &plan, &mut seen, &mut first)?;
     }
     Ok(())
 }
@@ -485,6 +489,59 @@ fn finish_unit(
     Ok(())
 }
 
+fn revert_units(active_units: &IndexMap<UnitId, ActiveState>) -> CargoResult<()> {
+    for (file, original) in active_units
+        .values()
+        .flat_map(|state| state.snapshots.iter())
+    {
+        paths::write(file, &original.original_source)?;
+    }
+    Ok(())
+}
+
+#[derive(Debug)]
+struct CheckResults {
+    messages: Vec<CheckOutput>,
+    diagnostics: Vec<u8>,
+    exit_code: Option<i32>,
+}
+
+fn run_check(
+    args: &FixitArgs,
+    lint_cap: &mut bool,
+    plan: &UnitGraph,
+    seen: &mut BTreeSet<String>,
+    first: &mut bool,
+) -> CargoResult<CheckResults> {
+    let mut check = Check::run(args, *lint_cap)?;
+    let mut messages = Vec::new();
+    let mut errors = BuildUnitErrors::new();
+    for message in check.output() {
+        if *first {
+            print_unplanned(&message, plan, seen, &mut errors)?;
+        }
+        print_built(args, &message)?;
+        messages.push(message);
+    }
+    *first = false;
+    let (mut diagnostics, mut exit_code) = check.wait()?;
+    if apply_lint_cap(&messages, exit_code, lint_cap) {
+        let mut check = Check::run(args, *lint_cap)?;
+        messages.clear();
+        for message in check.output() {
+            print_built(args, &message)?;
+            messages.push(message);
+        }
+        (diagnostics, exit_code) = check.wait()?;
+    }
+    messages.sort_unstable_by_key(|m| m.build_unit().cloned());
+    Ok(CheckResults {
+        messages,
+        diagnostics,
+        exit_code,
+    })
+}
+
 struct Check {
     child: Child,
     diagnostics: JoinHandle<std::io::Result<Vec<u8>>>,
@@ -519,6 +576,20 @@ impl Check {
             .filter_map(|line| serde_json::from_str(&line).ok())
     }
 
+    fn collect(mut self, args: &FixitArgs) -> CargoResult<CheckResults> {
+        let mut messages = Vec::new();
+        for message in self.output() {
+            print_built(args, &message)?;
+            messages.push(message);
+        }
+        let (diagnostics, exit_code) = self.wait()?;
+        Ok(CheckResults {
+            messages,
+            diagnostics,
+            exit_code,
+        })
+    }
+
     fn wait(self) -> CargoResult<(Vec<u8>, Option<i32>)> {
         let output = self.child.wait_with_output()?;
         let diagnostics = self
@@ -535,6 +606,42 @@ fn apply_lint_cap(output: &[CheckOutput], status: Option<i32>, lint_cap: &mut bo
     }
 
     *lint_cap
+}
+
+fn print_unplanned(
+    message: &CheckOutput,
+    plan: &UnitGraph,
+    seen: &mut BTreeSet<String>,
+    errors: &mut BuildUnitErrors,
+) -> CargoResult<()> {
+    match message {
+        CheckOutput::Message(Message {
+            build_unit,
+            message: MessageDiagnostic { diagnostic, .. },
+        }) => {
+            let package_id = &build_unit.package_id;
+            let unit_id = UnitId::from_message(build_unit);
+            if !is_local(package_id) || !plan.dependencies.contains_key(&unit_id) {
+                if let Some(rendered) = diagnostic.rendered.clone() {
+                    let errors = errors.entry(unit_id).or_default();
+                    errors.insert(rendered);
+                }
+            }
+        }
+        CheckOutput::Artifact(a) => {
+            let package_id = &a.build_unit.package_id;
+            let unit_id = UnitId::from_message(&a.build_unit);
+            if !is_local(package_id) || !plan.dependencies.contains_key(&unit_id) {
+                for error in errors.get(&unit_id).into_iter().flatten() {
+                    shell::print_ansi_stderr(format!("{}\n\n", error.trim_end()).as_bytes())?;
+                }
+                if !a.fresh && seen.insert(package_id.to_owned()) {
+                    shell::status("Checking", format_package_id(package_id)?)?;
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 fn print_built(args: &FixitArgs, message: &CheckOutput) -> CargoResult<()> {
@@ -597,11 +704,11 @@ fn denied_lint(messages: &[CheckOutput]) -> bool {
 }
 
 #[tracing::instrument(skip_all)]
-fn collect_diagnostics(
-    messages: impl Iterator<Item = CheckOutput>,
+fn collect_diagnostics<'a>(
+    messages: impl Iterator<Item = &'a CheckOutput>,
     finished: &BTreeSet<UnitId>,
     primary_packages: &PrimaryPackages,
-    active_units: &mut IndexMap<UnitId, ActiveState>,
+    active_units: &IndexMap<UnitId, ActiveState>,
     max_iterations: usize,
 ) -> (BuildUnitErrors, BuildUnitSuggestions) {
     let only = HashSet::new();
@@ -622,20 +729,20 @@ fn collect_diagnostics(
             }
         };
 
-        let unit_id = UnitId::from_message(&build_unit);
+        let unit_id = UnitId::from_message(build_unit);
         if finished.contains(&unit_id) {
             trace!("rejecting build unit `{:?}` already finished", build_unit);
             continue;
         }
 
-        if let Some(state) = active_units.get_mut(&unit_id) {
+        if let Some(state) = active_units.get(&unit_id) {
             if state.iterations >= max_iterations {
                 trace!(
                     "rejecting build unit `{:?}` exceeded max iteration count",
                     build_unit
                 );
                 let errors = errors.entry(unit_id).or_insert_with(IndexSet::new);
-                if let Some(rendered) = diagnostic.rendered {
+                if let Some(rendered) = diagnostic.rendered.clone() {
                     errors.insert(rendered);
                 }
                 continue;
@@ -648,7 +755,7 @@ fn collect_diagnostics(
                 build_unit
             );
             let errors = errors.entry(unit_id).or_insert_with(IndexSet::new);
-            if let Some(rendered) = diagnostic.rendered {
+            if let Some(rendered) = diagnostic.rendered.clone() {
                 errors.insert(rendered);
             }
             continue;
@@ -659,10 +766,10 @@ fn collect_diagnostics(
         } else {
             rustfix::Filter::MachineApplicableOnly
         };
-        let Some(suggestion) = collect_suggestions(&diagnostic, &only, filter) else {
+        let Some(suggestion) = collect_suggestions(diagnostic, &only, filter) else {
             trace!("rejecting as not a MachineApplicable diagnosis: {diagnostic:?}");
             let errors = errors.entry(unit_id).or_insert_with(IndexSet::new);
-            if let Some(rendered) = diagnostic.rendered {
+            if let Some(rendered) = diagnostic.rendered.clone() {
                 errors.insert(rendered);
             }
             continue;
@@ -677,7 +784,7 @@ fn collect_diagnostics(
         let Some(file_name) = file_names.next() else {
             trace!("rejecting as it has no solutions {:?}", suggestion);
             let errors = errors.entry(unit_id).or_insert_with(IndexSet::new);
-            if let Some(rendered) = diagnostic.rendered {
+            if let Some(rendered) = diagnostic.rendered.clone() {
                 errors.insert(rendered);
             }
             continue;
@@ -686,7 +793,7 @@ fn collect_diagnostics(
         if !file_names.all(|f| f == file_name) {
             trace!("rejecting as it changes multiple files: {:?}", suggestion);
             let errors = errors.entry(unit_id).or_insert_with(IndexSet::new);
-            if let Some(rendered) = diagnostic.rendered {
+            if let Some(rendered) = diagnostic.rendered.clone() {
                 errors.insert(rendered);
             }
             continue;
@@ -697,7 +804,7 @@ fn collect_diagnostics(
         if let Ok(home) = env::var("CARGO_HOME") {
             if file_path.starts_with(home) {
                 let errors = errors.entry(unit_id).or_insert_with(IndexSet::new);
-                if let Some(rendered) = diagnostic.rendered {
+                if let Some(rendered) = diagnostic.rendered.clone() {
                     errors.insert(rendered);
                 }
                 continue;
@@ -708,7 +815,7 @@ fn collect_diagnostics(
             if let Some(sysroot) = get_sysroot() {
                 if file_path.starts_with(sysroot) {
                     let errors = errors.entry(unit_id).or_insert_with(IndexSet::new);
-                    if let Some(rendered) = diagnostic.rendered {
+                    if let Some(rendered) = diagnostic.rendered.clone() {
                         errors.insert(rendered);
                     }
                     continue;
@@ -722,10 +829,44 @@ fn collect_diagnostics(
         unit_suggestions
             .entry(file_name.to_owned())
             .or_insert_with(IndexSet::new)
-            .insert((suggestion, diagnostic.rendered));
+            .insert((suggestion, diagnostic.rendered.clone()));
     }
 
     (errors, suggestions)
+}
+
+#[tracing::instrument(skip_all)]
+fn fix_batch(
+    suggestions: &BuildUnitSuggestions,
+    active_units: &mut IndexMap<UnitId, ActiveState>,
+    claimed_files: &mut HashMap<same_file::Handle, UnitId>,
+) -> CargoResult<bool> {
+    let mut made_changes = false;
+    'units: for (unit_id, state) in active_units.iter_mut() {
+        let Some(unit_suggestions) = suggestions.get(unit_id) else {
+            continue;
+        };
+        for path in state.snapshots.keys().chain(unit_suggestions.keys()) {
+            let Ok(handle) = same_file::Handle::from_path(path) else {
+                continue;
+            };
+            match claimed_files.entry(handle) {
+                std::collections::hash_map::Entry::Occupied(entry) if entry.get() != unit_id => {
+                    trace!("deferring `{unit_id:?}` due to contention over {path}");
+                    claimed_files.retain(|_k, v| v != unit_id);
+                    continue 'units;
+                }
+                std::collections::hash_map::Entry::Occupied(_) => {}
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    entry.insert(unit_id.clone());
+                }
+            }
+        }
+        trace!("fixing `{unit_id:?}` {state:?}");
+        state.iterations += 1;
+        made_changes |= fix_suggestions(unit_suggestions, state)?;
+    }
+    Ok(made_changes)
 }
 
 #[tracing::instrument(skip_all)]
@@ -845,7 +986,7 @@ impl UnitId {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct UnitGraph {
     dependencies: BTreeMap<UnitId, BTreeSet<UnitId>>,
     finished: BTreeSet<UnitId>,
@@ -962,6 +1103,26 @@ impl UnitGraph {
         Self {
             dependencies,
             finished: Default::default(),
+        }
+    }
+
+    /// Add a chain of dependencies in topological order so only one unit is ready at a time.
+    fn make_linear(&mut self) {
+        let mut graph = self.clone();
+        let mut previous = None;
+        while !graph.is_empty() {
+            let ready = graph.take_ready();
+            assert!(!ready.is_empty(), "{graph:#?}");
+            for unit_id in &ready {
+                if let Some(previous) = previous {
+                    self.dependencies
+                        .get_mut(unit_id)
+                        .expect("ready unit is in the graph")
+                        .insert(previous);
+                }
+                previous = Some(unit_id.clone());
+            }
+            graph.mark_finished(ready);
         }
     }
 
