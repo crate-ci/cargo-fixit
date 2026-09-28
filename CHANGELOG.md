@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 <!-- next-header -->
 ## [Unreleased] - ReleaseDate
 
+## [0.1.17] - 2026-09-28
+
 ### Performance
 
 - Made `-Zbatch=try-all` the default, assuming best case full-parallel fix
@@ -160,7 +162,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [0.1.0] - 2025-07-18
 
 <!-- next-url -->
-[Unreleased]: https://github.com/crate-ci/cargo-fixit/compare/v0.1.16...HEAD
+[Unreleased]: https://github.com/crate-ci/cargo-fixit/compare/v0.1.17...HEAD
+[0.1.17]: https://github.com/crate-ci/cargo-fixit/compare/v0.1.16...v0.1.17
 [0.1.16]: https://github.com/crate-ci/cargo-fixit/compare/v0.1.15...v0.1.16
 [0.1.15]: https://github.com/crate-ci/cargo-fixit/compare/v0.1.14...v0.1.15
 [0.1.14]: https://github.com/crate-ci/cargo-fixit/compare/v0.1.13...v0.1.14
