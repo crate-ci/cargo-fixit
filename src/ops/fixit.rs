@@ -642,7 +642,7 @@ fn collect_diagnostics<'a>(
     messages: impl Iterator<Item = &'a CheckOutput>,
     finished: &BTreeSet<UnitId>,
     primary_packages: &PrimaryPackages,
-    active_units: &mut IndexMap<UnitId, ActiveState>,
+    active_units: &IndexMap<UnitId, ActiveState>,
     max_iterations: usize,
 ) -> (BuildUnitErrors, BuildUnitSuggestions) {
     let only = HashSet::new();
@@ -669,7 +669,7 @@ fn collect_diagnostics<'a>(
             continue;
         }
 
-        if let Some(state) = active_units.get_mut(&unit_id) {
+        if let Some(state) = active_units.get(&unit_id) {
             if state.iterations >= max_iterations {
                 trace!(
                     "rejecting build unit `{:?}` exceeded max iteration count",
