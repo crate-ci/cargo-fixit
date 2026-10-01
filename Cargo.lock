@@ -200,7 +200,7 @@ dependencies = [
  "clap",
  "clap-cargo",
  "colorchoice-clap",
- "git2",
+ "git2 0.20.4",
  "glob",
  "indexmap",
  "log",
@@ -226,15 +226,15 @@ dependencies = [
 
 [[package]]
 name = "cargo-test-macro"
-version = "0.4.12"
+version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c621dbb9daf99010477d9e63a905aa26fc2e9be0410906bda20d461c72abb604"
+checksum = "b6ed90dbe382d1cf6a81c1a5a393993875f13040ca8e79e38edf313f23e36285"
 
 [[package]]
 name = "cargo-test-support"
-version = "0.11.3"
+version = "0.11.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df383ea6ee1d68bd46f8cee07da6a6ffab712cf96661b66daaabe31bcf2aca8a"
+checksum = "da575d950f61b24dd01884d45523bac01c31bd3eebd405d4b3d8c4e506b51f9d"
 dependencies = [
  "anyhow",
  "cargo-test-macro",
@@ -242,7 +242,7 @@ dependencies = [
  "crates-io",
  "filetime",
  "flate2",
- "git2",
+ "git2 0.21.0",
  "glob",
  "itertools",
  "pasetors",
@@ -260,9 +260,9 @@ dependencies = [
 
 [[package]]
 name = "cargo-util"
-version = "0.2.30"
+version = "0.2.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d7123d293f652da25899a771e48756075710465b2eedb0fc35aa3b368e9cf5c"
+checksum = "dbe819082beae53247a2c440bece59bc2d1d90736cf5bed6b87f5e5bb53f0d30"
 dependencies = [
  "anyhow",
  "core-foundation",
@@ -454,9 +454,9 @@ dependencies = [
 
 [[package]]
 name = "crates-io"
-version = "0.41.0"
+version = "0.41.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55754653d4ac92d6ed1d01970872e0c9803c4eecc916095e19b862d67625b987"
+checksum = "c047c636cac168acc89c2df97a9017f2751e96742faaa35941fabec8c9d057a9"
 dependencies = [
  "http",
  "percent-encoding",
@@ -804,6 +804,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "git2"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ddddbf932745a6be37109b6112d3ee09696106f848449069d3a57bba937ab82e"
+dependencies = [
+ "bitflags 2.13.1",
+ "libc",
+ "libgit2-sys",
+ "log",
+ "openssl-probe",
+ "openssl-sys",
+ "url",
+]
+
+[[package]]
 name = "glob"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1034,9 +1049,9 @@ checksum = "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
 
 [[package]]
 name = "itertools"
-version = "0.14.0"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285"
+checksum = "8b4baf93f58d4425749ca49a51c50ebab072c5df6994d08fed93541c331481dc"
 dependencies = [
  "either",
 ]
