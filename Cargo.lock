@@ -200,7 +200,7 @@ dependencies = [
  "clap",
  "clap-cargo",
  "colorchoice-clap",
- "git2",
+ "git2 0.21.0",
  "glob",
  "indexmap",
  "log",
@@ -242,7 +242,7 @@ dependencies = [
  "crates-io",
  "filetime",
  "flate2",
- "git2",
+ "git2 0.20.4",
  "glob",
  "itertools",
  "pasetors",
@@ -801,6 +801,18 @@ dependencies = [
  "openssl-probe",
  "openssl-sys",
  "url",
+]
+
+[[package]]
+name = "git2"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ddddbf932745a6be37109b6112d3ee09696106f848449069d3a57bba937ab82e"
+dependencies = [
+ "bitflags 2.13.1",
+ "libc",
+ "libgit2-sys",
+ "log",
 ]
 
 [[package]]
